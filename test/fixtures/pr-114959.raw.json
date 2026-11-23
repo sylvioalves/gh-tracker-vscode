@@ -1,0 +1,1511 @@
+{
+ "id": "PR_kwDOA5AKIc74fmOy",
+ "number": 114959,
+ "title": "soc: espressif: enable Espressif hw flash encryption via sysbuild",
+ "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959",
+ "state": "OPEN",
+ "isDraft": false,
+ "mergeable": "CONFLICTING",
+ "reviewDecision": "CHANGES_REQUESTED",
+ "headRefOid": "981e9c00ff81352868059be0b2c966c1f75133c4",
+ "baseRefName": "main",
+ "createdAt": "2026-07-30T11:44:17Z",
+ "updatedAt": "2026-11-19T19:25:08Z",
+ "additions": 2074,
+ "deletions": 129,
+ "changedFiles": 76,
+ "author": {
+  "login": "almir-okato"
+ },
+ "repository": {
+  "nameWithOwner": "zephyrproject-rtos/zephyr"
+ },
+ "assignees": {
+  "nodes": [
+   {
+    "login": "sylvioalves"
+   }
+  ]
+ },
+ "labels": {
+  "nodes": [
+   {
+    "name": "area: Samples"
+   },
+   {
+    "name": "area: Flash"
+   },
+   {
+    "name": "platform: ESP32"
+   },
+   {
+    "name": "manifest"
+   },
+   {
+    "name": "area: Continuous Integration"
+   },
+   {
+    "name": "manifest-hal_espressif"
+   },
+   {
+    "name": "area: LVGL"
+   },
+   {
+    "name": "DNM (manifest)"
+   },
+   {
+    "name": "area: Boards/SoCs"
+   },
+   {
+    "name": "Release"
+   },
+   {
+    "name": "size: XL"
+   }
+  ]
+ },
+ "reviewRequests": {
+  "nodes": [
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "Albort12138"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "de-nordic"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "fabiobaltieri"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "henrikbrixandersen"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "kartben"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "LucasTambor"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "marekmatej"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "nashif"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "raffarost"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "rghaddab"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "stephanosio"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "uLipe"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "wmrsouza"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "faxe1008"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "pdgendt"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "JarmouniA"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "tmedicci"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "iuliana-prodan"
+    }
+   },
+   {
+    "requestedReviewer": {
+     "__typename": "User",
+     "login": "sylvioalves"
+    }
+   }
+  ]
+ },
+ "latestReviews": {
+  "nodes": [
+   {
+    "author": {
+     "login": "nordicjm"
+    },
+    "state": "CHANGES_REQUESTED",
+    "submittedAt": "2026-11-06T07:51:12Z",
+    "commit": {
+     "oid": "f3f1d30a768be2e154194cb0ecbdfcec84efb859"
+    }
+   }
+  ]
+ },
+ "myReviews": {
+  "nodes": [
+   {
+    "state": "CHANGES_REQUESTED",
+    "submittedAt": "2026-11-18T14:00:37Z",
+    "commit": {
+     "oid": "19084de379697507dce3ef15c3672feb1a7b14a7"
+    }
+   }
+  ]
+ },
+ "pending": {
+  "nodes": []
+ },
+ "commits": {
+  "nodes": [
+   {
+    "commit": {
+     "oid": "981e9c00ff81352868059be0b2c966c1f75133c4",
+     "committedDate": "2026-11-19T19:23:38Z",
+     "statusCheckRollup": {
+      "state": "FAILURE"
+     }
+    }
+   }
+  ]
+ },
+ "pushes": {
+  "nodes": [
+   {
+    "createdAt": "2026-11-19T19:23:49Z"
+   }
+  ]
+ },
+ "reviewThreads": {
+  "nodes": [
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "tmedicci"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "tmedicci"
+       },
+       "createdAt": "2026-08-31T19:34:13Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r3897715617"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": 251,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "tmedicci"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-09-22T14:22:16Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4072719985"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": 261,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "tmedicci"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-09-22T14:47:21Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4072977877"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": 478,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "tmedicci"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-09-22T14:34:38Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4072846970"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/common/CMakeLists.txt",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "tmedicci"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-09-22T14:35:17Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4072854489"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/common/Kconfig.flash",
+    "line": 1,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "tmedicci"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-09-22T14:46:50Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4072971994"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "boards/espressif/common/building-flashing.rst",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T19:37:48Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485139494"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/Kconfig.sysbuild",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T19:39:11Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485155479"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/common/Kconfig.flash",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T20:00:28Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485376568"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T20:02:12Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485393178"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T20:15:04Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485524549"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/image_configurations/MAIN_mcuboot_hw_flash_encryption.cmake",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T20:15:53Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485534466"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T20:16:59Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485547405"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T20:20:25Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485589124"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "boards/espressif/common/building-flashing.rst",
+    "line": 77,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T20:20:58Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485595701"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/common/loader.c",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T20:21:52Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485605901"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "boards/espressif/common/building-flashing.rst",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T20:22:49Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485615479"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/image_configurations/BOOTLOADER_mcuboot_hw_flash_encryption.cmake",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-17T20:37:22Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4605468533"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "soc/espressif/esp32s3/default.ld",
+    "line": 1152,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T20:35:40Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485749871"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-05T20:41:01Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4485805430"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/Kconfig.sysbuild",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "nordicjm"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-06T21:23:22Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4497750334"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/common/CMakeLists.txt",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "nordicjm"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-06T21:20:16Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4497717440"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "tmedicci"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-17T20:38:46Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4605485232"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/image_configurations/BOOTLOADER_mcuboot_hw_flash_encryption.cmake",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-17T20:43:30Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4605542411"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": 521,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-17T20:43:08Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4605537991"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/image_configurations/MAIN_mcuboot_hw_flash_encryption.cmake",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-17T20:41:35Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4605519401"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/common/CMakeLists.txt",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-17T20:40:22Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4605505349"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/esp32c61/Kconfig.caps",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-17T20:40:09Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4605502672"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "drivers/flash/flash_esp32.c",
+    "line": 593,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-17T20:40:02Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4605501037"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "boards/espressif/common/building-flashing.rst",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-17T20:39:54Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4605499403"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/Kconfig.sysbuild",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-17T20:39:30Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4605494345"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "samples/boards/espressif/flash_encryption/tests.yaml",
+    "line": 12,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:38:06Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621831058"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "boards/espressif/common/building-flashing.rst",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:37:56Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621829475"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "boards/espressif/common/building-flashing.rst",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:37:49Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621828199"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "boards/espressif/common/building-flashing.rst",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:37:44Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621827338"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "boards/espressif/common/building-flashing.rst",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:37:38Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621826374"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "boards/espressif/common/building-flashing.rst",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:37:31Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621825371"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "samples/boards/espressif/flash_encryption/README.rst",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:37:25Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621824321"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "samples/boards/espressif/flash_encryption/README.rst",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:37:16Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621822822"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "drivers/flash/Kconfig.esp32",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:37:08Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621821311"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "drivers/flash/Kconfig.esp32",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:33:35Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621788382"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/common/CMakeLists.txt",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:33:10Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621784491"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": false,
+    "isOutdated": false,
+    "path": "soc/espressif/common/Kconfig.security",
+    "line": 6,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:48:21Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621925149"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": false,
+    "isOutdated": false,
+    "path": "soc/espressif/esp32c5/Kconfig.soc",
+    "line": 35,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:49:35Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621936392"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "drivers/flash/Kconfig.esp32",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:32:33Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621778616"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/common/CMakeLists.txt",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:32:20Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621776567"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/common/CMakeLists.txt",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:32:13Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621775462"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "boards/espressif/common/building-flashing.rst",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:32:06Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621774356"
+      }
+     ]
+    }
+   },
+   {
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "soc/espressif/common/loader.c",
+    "line": null,
+    "first": {
+     "nodes": [
+      {
+       "author": {
+        "login": "sylvioalves"
+       }
+      }
+     ]
+    },
+    "last": {
+     "nodes": [
+      {
+       "author": {
+        "login": "almir-okato"
+       },
+       "createdAt": "2026-11-18T22:26:46Z",
+       "url": "https://github.com/zephyrproject-rtos/zephyr/pull/114959#discussion_r4621717837"
+      }
+     ]
+    }
+   }
+  ]
+ }
+}

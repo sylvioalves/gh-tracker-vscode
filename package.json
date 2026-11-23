@@ -1,0 +1,561 @@
+{
+  "name": "ghtracker",
+  "displayName": "GH Tracker",
+  "description": "Pull requests waiting on you, with review ledgers and Claude sessions",
+  "version": "0.1.0",
+  "publisher": "sylvioalves",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sylvioalves/gh-tracker-vscode.git"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "GH Tracker starts Claude sessions in the workspace folder, so it stays off until the workspace is trusted."
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ghtracker",
+          "title": "GH Tracker",
+          "icon": "media/ghtracker.svg"
+        }
+      ]
+    },
+    "views": {
+      "ghtracker": [
+        {
+          "type": "webview",
+          "id": "ghtracker.prs",
+          "name": "Pull Requests"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "ghtracker.refresh",
+        "title": "Refresh",
+        "category": "GH Tracker",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ghtracker.markAllSeen",
+        "title": "Mark All Seen",
+        "category": "GH Tracker",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "ghtracker.signIn",
+        "title": "Sign In to GitHub",
+        "category": "GH Tracker"
+      },
+      {
+        "command": "ghtracker.pin",
+        "title": "Track a Pull Request...",
+        "category": "GH Tracker",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "ghtracker.review",
+        "title": "Review with Claude (/pr-rev)",
+        "category": "GH Tracker",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "ghtracker.analyzeIssue",
+        "title": "Analyze Issue with Claude",
+        "category": "GH Tracker",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "ghtracker.postDraft",
+        "title": "Draft GitHub Review with Claude (/pr-post)",
+        "category": "GH Tracker",
+        "icon": "$(comment-draft)"
+      },
+      {
+        "command": "ghtracker.openSession",
+        "title": "Resume Last Claude Session",
+        "category": "GH Tracker",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "ghtracker.openLedger",
+        "title": "Open Ledger",
+        "category": "GH Tracker",
+        "icon": "$(book)"
+      },
+      {
+        "command": "ghtracker.openOnGitHub",
+        "title": "Open on GitHub",
+        "category": "GH Tracker",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "ghtracker.copyRef",
+        "title": "Copy PR Reference",
+        "category": "GH Tracker"
+      },
+      {
+        "command": "ghtracker.markChecked",
+        "title": "Mark Checked",
+        "category": "GH Tracker",
+        "icon": "$(check)"
+      },
+      {
+        "command": "ghtracker.unpin",
+        "title": "Stop Tracking",
+        "category": "GH Tracker"
+      },
+      {
+        "command": "ghtracker.fresh",
+        "title": "Re-check Analysis in Session (/fresh)",
+        "category": "GH Tracker",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "ghtracker.findings",
+        "title": "List Findings in Session (/findings)",
+        "category": "GH Tracker",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "ghtracker.cleanup",
+        "title": "Clean Up Session Files (/cleanup)",
+        "category": "GH Tracker",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "ghtracker.openInEditor",
+        "title": "Open Pull Request",
+        "category": "GH Tracker",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "ghtracker.openChanges",
+        "title": "Open Changed Files",
+        "category": "GH Tracker",
+        "icon": "$(diff-multiple)"
+      },
+      {
+        "command": "ghtracker.collapseAll",
+        "title": "Collapse All",
+        "category": "GH Tracker",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "ghtracker.openInGitHubExtension",
+        "title": "Open in GitHub Pull Requests View",
+        "category": "GH Tracker"
+      },
+      {
+        "command": "ghtracker.markRead",
+        "title": "Mark Read",
+        "category": "GH Tracker"
+      },
+      {
+        "command": "ghtracker.manageFilters",
+        "title": "Manage Filters",
+        "category": "GH Tracker",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "ghtracker.addFilter",
+        "title": "Add Filter",
+        "category": "GH Tracker",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ghtracker.editFilter",
+        "title": "Edit Filter",
+        "category": "GH Tracker"
+      },
+      {
+        "command": "ghtracker.removeFilter",
+        "title": "Remove Filter",
+        "category": "GH Tracker"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ghtracker.markAllSeen",
+          "when": "view == ghtracker.prs",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ghtracker.refresh",
+          "when": "view == ghtracker.prs",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ghtracker.collapseAll",
+          "when": "view == ghtracker.prs",
+          "group": "navigation@3"
+        },
+        {
+          "command": "ghtracker.addFilter",
+          "when": "view == ghtracker.prs",
+          "group": "navigation@4"
+        },
+        {
+          "command": "ghtracker.manageFilters",
+          "when": "view == ghtracker.prs",
+          "group": "navigation@5"
+        },
+        {
+          "command": "ghtracker.pin",
+          "when": "view == ghtracker.prs",
+          "group": "overflow@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ghtracker.review",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.postDraft",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.openSession",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.openLedger",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.openOnGitHub",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.copyRef",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.markChecked",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.unpin",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.fresh",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.findings",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.cleanup",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.openInEditor",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.openChanges",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.collapseAll",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.openInGitHubExtension",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.markRead",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.analyzeIssue",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.editFilter",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.removeFilter",
+          "when": "false"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "ghtracker.review",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bpr\\b/",
+          "group": "1_claude@1"
+        },
+        {
+          "command": "ghtracker.analyzeIssue",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bissue\\b/",
+          "group": "1_claude@1"
+        },
+        {
+          "command": "ghtracker.openSession",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bsession\\b/",
+          "group": "1_claude@2"
+        },
+        {
+          "command": "ghtracker.fresh",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bsession\\b/",
+          "group": "1_claude@3"
+        },
+        {
+          "command": "ghtracker.findings",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bsession\\b/",
+          "group": "1_claude@4"
+        },
+        {
+          "command": "ghtracker.postDraft",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bledger\\b/",
+          "group": "1_claude@5"
+        },
+        {
+          "command": "ghtracker.cleanup",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bsession\\b/",
+          "group": "1_claude@6"
+        },
+        {
+          "command": "ghtracker.openInEditor",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bpr\\b/",
+          "group": "2_open@1"
+        },
+        {
+          "command": "ghtracker.openChanges",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bpr\\b/",
+          "group": "2_open@2"
+        },
+        {
+          "command": "ghtracker.openLedger",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bledger\\b/",
+          "group": "2_open@3"
+        },
+        {
+          "command": "ghtracker.openOnGitHub",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr'",
+          "group": "2_open@4"
+        },
+        {
+          "command": "ghtracker.copyRef",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bpr\\b/",
+          "group": "2_open@5"
+        },
+        {
+          "command": "ghtracker.markChecked",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bmyturn\\b/",
+          "group": "3_state@1"
+        },
+        {
+          "command": "ghtracker.unpin",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bpinned\\b/",
+          "group": "3_state@2"
+        },
+        {
+          "command": "ghtracker.openSession",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'session'",
+          "group": "1_claude@1"
+        },
+        {
+          "command": "ghtracker.fresh",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'session'",
+          "group": "1_claude@2"
+        },
+        {
+          "command": "ghtracker.findings",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'session'",
+          "group": "1_claude@3"
+        },
+        {
+          "command": "ghtracker.cleanup",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'session'",
+          "group": "1_claude@4"
+        },
+        {
+          "command": "ghtracker.openLedger",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'ledger'",
+          "group": "1_open@1"
+        },
+        {
+          "command": "ghtracker.postDraft",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'ledger'",
+          "group": "1_open@2"
+        },
+        {
+          "command": "ghtracker.openInGitHubExtension",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bpr\\b/",
+          "group": "2_open@1.5"
+        },
+        {
+          "command": "ghtracker.editFilter",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'filter'",
+          "group": "1_filter@1"
+        },
+        {
+          "command": "ghtracker.removeFilter",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'filter'",
+          "group": "1_filter@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "GH Tracker",
+      "properties": {
+        "ghtracker.repos": {
+          "type": "array",
+          "scope": "application",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "zephyrproject-rtos/zephyr",
+            "zephyrproject-rtos/hal_espressif"
+          ],
+          "description": "Repositories to track, as owner/name."
+        },
+        "ghtracker.watchedLabels": {
+          "type": "array",
+          "scope": "application",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "platform: ESP32"
+          ],
+          "description": "Review requests count as To review only on pull requests carrying one of these labels."
+        },
+        "ghtracker.queries": {
+          "type": "array",
+          "scope": "application",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Group label shown in the panel."
+              },
+              "query": {
+                "type": "string",
+                "minLength": 1,
+                "description": "GitHub search query, for example repo:owner/name is:issue is:open label:\"bug\"."
+              }
+            },
+            "required": [
+              "name",
+              "query"
+            ],
+            "additionalProperties": false
+          },
+          "default": [
+            {
+              "name": "ESP32 issues",
+              "query": "repo:zephyrproject-rtos/zephyr is:issue is:open label:\"platform: ESP32\""
+            }
+          ],
+          "markdownDescription": "Custom GitHub searches, each shown as its own group after the pull request groups. Results can be issues or pull requests, up to 100 per query. Edit them with the **GH Tracker: Manage Filters** command."
+        },
+        "ghtracker.pollMinutes": {
+          "type": "number",
+          "scope": "application",
+          "default": 10,
+          "minimum": 2,
+          "description": "Minutes between GitHub polls."
+        },
+        "ghtracker.ledgerDir": {
+          "type": "string",
+          "scope": "application",
+          "default": "~/.claude/reviews",
+          "description": "Directory holding the review ledgers (<repo>-<N>.md)."
+        },
+        "ghtracker.sessionIndex": {
+          "type": "string",
+          "scope": "application",
+          "default": "~/.claude/reviews/sessions.jsonl",
+          "description": "Session index written by the pr-session-index hook."
+        },
+        "ghtracker.notifications": {
+          "type": "boolean",
+          "scope": "application",
+          "default": true,
+          "description": "Show a notification when a pull request comes to your turn."
+        },
+        "ghtracker.reviewLaunch": {
+          "type": "string",
+          "scope": "application",
+          "enum": [
+            "tab",
+            "terminal"
+          ],
+          "default": "tab",
+          "enumDescriptions": [
+            "Open a Claude tab with the command filled in, to send with Enter.",
+            "Run the Claude CLI in a terminal, which starts the command at once."
+          ],
+          "description": "Where Review with Claude and Draft GitHub Review start."
+        },
+        "ghtracker.reviewSettings": {
+          "type": "string",
+          "scope": "application",
+          "default": "~/.claude/profiles/review.json",
+          "markdownDescription": "Claude Code settings file passed as `--settings` when a review starts in a terminal: a sandboxed, read-only profile for sessions that read untrusted pull request text. Empty disables it."
+        },
+        "ghtracker.openPrIn": {
+          "type": "string",
+          "scope": "application",
+          "enum": [
+            "integratedBrowser",
+            "githubExtension",
+            "externalBrowser"
+          ],
+          "default": "integratedBrowser",
+          "enumDescriptions": [
+            "github.com in VS Code's integrated browser tab.",
+            "The GitHub Pull Requests extension view.",
+            "The system web browser."
+          ],
+          "description": "Where clicking a pull request opens it."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "check": "tsc -p .",
+    "test": "node --test \"test/**/*.test.ts\" && python3 -m unittest discover -s hooks -q",
+    "package": "npm run check && npm test && npm run build && vsce package --no-dependencies -o dist/ghtracker.vsix",
+    "install-hook": "install -D -m 755 hooks/pr-session-index.py ~/.claude/hooks/pr-session-index.py && install -D -m 755 hooks/review-guard.py ~/.claude/hooks/review-guard.py",
+    "install-ext": "code --install-extension dist/ghtracker.vsix --force ${VSCODE_PROFILE:+--profile \"$VSCODE_PROFILE\"}"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "~1.100.0",
+    "@vscode/codicons": "^0.0.36",
+    "@vscode/vsce": "^4.1.1",
+    "esbuild": "^0.28.0",
+    "typescript": "^7.0.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.9"
+  }
+}

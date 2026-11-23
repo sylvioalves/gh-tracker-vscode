@@ -1,0 +1,12 @@
+**
+!dist/extension.cjs
+!dist/webview/panel.js
+!dist/webview/panel.css
+!dist/webview/filters.js
+!dist/webview/filters.css
+!dist/webview/codicon.css
+!dist/webview/codicon.ttf
+!media/ghtracker.svg
+!package.json
+!LICENSE
+!README.md
