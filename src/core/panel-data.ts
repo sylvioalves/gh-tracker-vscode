@@ -1,5 +1,6 @@
 import type { ReasonKind } from './classify.ts';
 import { authorTrust, type AuthorTrust } from './github.ts';
+import { PRS_KEY, queryKey } from './progress.ts';
 import type { Session } from './sessions.ts';
 import { rowTime, type Group, type IssueRow, type Row, type ViewRow } from './view.ts';
 
@@ -40,11 +41,14 @@ export interface PanelGroup {
   label: string;
   myTurn: boolean;
   rows: PanelRow[];
+  /* Percent fetched while a refresh runs. */
+  progress?: number;
 }
 
 export interface PanelOptions {
   expired: (s: Session) => boolean;
   pinned: (key: string) => boolean;
+  progress?: Record<string, number> | null;
 }
 
 const ICONS: Record<ReasonKind, string> = {
@@ -201,6 +205,26 @@ export function panelRow(row: ViewRow, opts: PanelOptions): PanelRow {
   };
 }
 
+/* Progress of a group: its own key for a custom filter, the shared
+ * pull request key for the built-in groups.
+ */
+export function groupProgress(id: string, progress: Record<string, number> | null | undefined): number | undefined {
+  return progress?.[id.startsWith(queryKey('')) ? id : PRS_KEY];
+}
+
+/* Overall percent of a running fetch, the mean over its groups. */
+export function overallProgress(progress: Record<string, number> | null | undefined): number | undefined {
+  const values = Object.values(progress ?? {});
+  return values.length > 0 ? Math.floor(values.reduce((a, b) => a + b, 0) / values.length) : undefined;
+}
+
 export function panelData(groups: Group[], opts: PanelOptions): PanelGroup[] {
-  return groups.map((g) => ({ id: g.id, label: g.label, myTurn: g.myTurn, rows: g.rows.map((r) => panelRow(r, opts)) }));
+  return groups.map((g) => {
+    const out: PanelGroup = { id: g.id, label: g.label, myTurn: g.myTurn, rows: g.rows.map((r) => panelRow(r, opts)) };
+    const progress = groupProgress(g.id, opts.progress);
+    if (progress !== undefined) {
+      out.progress = progress;
+    }
+    return out;
+  });
 }

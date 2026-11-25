@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import type { Ack } from '../core/classify.ts';
 import { customQueries, fetchQueries, fetchSnapshot, GithubError, httpGql, type CustomQuery, type Gql, type PrRef, type QueryResult, type RateInfo, type Snapshot } from '../core/github.ts';
 import { Lease } from '../core/lease.ts';
+import { Progress } from '../core/progress.ts';
 import { loadLedgers, type Ledger } from '../core/ledger.ts';
 import { loadSessionIndex, type Session } from '../core/sessions.ts';
 import { buildView, orderGroups, type Group, type Row, type ViewRow } from '../core/view.ts';
@@ -16,6 +17,7 @@ const RATE_RESERVE = 500;
 const RESET_SLACK_MS = 5000;
 const LEASE_TICK_MS = 30_000;
 const LEASE_STALE_MS = 90_000;
+const FIRE_MS = 200;
 const ACKS = 'acks';
 const SEEN = 'seen';
 const PINS = 'pins';
@@ -23,6 +25,40 @@ const GROUP_ORDER = 'groupOrder';
 
 export function expandHome(p: string): string {
   return p === '~' || p.startsWith('~/') ? homedir() + p.slice(1) : p;
+}
+
+/* GitHub budget as last reported, shared by every client of this window. */
+let rate: RateInfo | null = null;
+
+export function lastRate(): RateInfo | null {
+  return rate;
+}
+
+/* When GitHub should not be asked yet: the budget is spent, or for
+ * automatic work it is below the reserve.
+ */
+export function blockedUntil(manual: boolean): string | null {
+  if (!rate || Date.parse(rate.resetAt) <= Date.now()) {
+    return null;
+  }
+  return rate.remaining <= 0 || (!manual && rate.remaining < RATE_RESERVE) ? rate.resetAt : null;
+}
+
+/* A GitHub client that records the budget and refuses while blocked.
+ * Manual work comes from the user and may use the reserve.
+ */
+export function githubClient(token: string, manual: boolean, onRate?: () => void): Gql {
+  const gql = httpGql(token, fetch, (r) => {
+    rate = r;
+    onRate?.();
+  });
+  return async (query, variables) => {
+    const until = blockedUntil(manual);
+    if (until) {
+      throw new GithubError(0, 'GitHub rate limit reached', until);
+    }
+    return gql(query, variables);
+  };
 }
 
 export interface Settings {
@@ -66,7 +102,9 @@ export class Store implements vscode.Disposable {
   private busy = false;
   private again = false;
   private queriesStale = false;
-  private rate: RateInfo | null = null;
+  private fireTimer: NodeJS.Timeout | undefined;
+  /* Percent done per group key while a fetch runs. */
+  progress: Record<string, number> | null = null;
   private readonly lease: Lease;
   private leaseTimer: NodeJS.Timeout | undefined;
   private lastText = '';
@@ -164,28 +202,28 @@ export class Store implements vscode.Disposable {
     }
   }
 
-  /* When GitHub should not be asked yet: the budget is spent, or for
-   * automatic polls it is below the reserve.
-   */
-  private blockedUntil(manual: boolean): string | null {
-    const r = this.rate;
-    if (!r || Date.parse(r.resetAt) <= Date.now()) {
-      return null;
-    }
-    return r.remaining <= 0 || (!manual && r.remaining < RATE_RESERVE) ? r.resetAt : null;
+  private client(token: string, manual: boolean): Gql {
+    return githubClient(token, manual);
   }
 
-  private client(token: string, manual: boolean): Gql {
-    const gql = httpGql(token, fetch, (rate) => {
-      this.rate = rate;
+  /* Coalesces the many progress updates of a fetch into one render
+   * per FIRE_MS.
+   */
+  private fireSoon(): void {
+    if (this.fireTimer === undefined) {
+      this.fireTimer = setTimeout(() => {
+        this.fireTimer = undefined;
+        this.changed.fire();
+      }, FIRE_MS);
+    }
+  }
+
+  private tracker(): Progress {
+    this.progress = {};
+    return new Progress((p) => {
+      this.progress = p;
+      this.fireSoon();
     });
-    return async (query, variables) => {
-      const until = this.blockedUntil(manual);
-      if (until) {
-        throw new GithubError(0, 'GitHub rate limit reserve reached', until);
-      }
-      return gql(query, variables);
-    };
   }
 
   /* Status and delay after a GitHub refusal for rate limiting. */
@@ -249,8 +287,8 @@ export class Store implements vscode.Disposable {
     if (!this.snapshot) {
       this.cache = [];
     } else {
-      const names = settings().queries.map((q) => q.name);
-      const queries = (this.snapshot.queries ?? []).filter((q) => names.includes(q.name));
+      const have = new Map((this.snapshot.queries ?? []).map((q) => [q.name, q]));
+      const queries = settings().queries.map((q): QueryResult => have.get(q.name) ?? { name: q.name, query: q.query, prs: [], issues: [] });
       this.cache = orderGroups(buildView({
         snapshot: { ...this.snapshot, queries },
         ledgers: this.ledgers,
@@ -279,7 +317,7 @@ export class Store implements vscode.Disposable {
       return;
     }
     const s = settings();
-    const blocked = this.blockedUntil(manual);
+    const blocked = blockedUntil(manual);
     if (blocked) {
       this.schedule(this.limited(blocked));
       this.changed.fire();
@@ -299,7 +337,7 @@ export class Store implements vscode.Disposable {
       }
       this.snapshot = await fetchSnapshot(this.client(token, manual), {
         repos: s.repos, labels: s.labels, extra: this.plan(s), queries: s.queries, previous: this.snapshot,
-      });
+      }, this.tracker());
       await this.persist();
       this.failures = 0;
       this.status = { kind: 'idle' };
@@ -318,6 +356,7 @@ export class Store implements vscode.Disposable {
       }
     } finally {
       this.busy = false;
+      this.progress = null;
       const retry = Math.min(RETRY_MAX_MS, RETRY_MIN_MS * 2 ** Math.max(0, this.failures - 1));
       if (this.status.kind !== 'signedOut') {
         this.schedule(delay ?? (this.failures > 0 ? retry : s.pollMs));
@@ -368,7 +407,8 @@ export class Store implements vscode.Disposable {
         this.status = { kind: 'signedOut' };
         return;
       }
-      const fetched = new Map((await fetchQueries(this.client(token, true), snapshot.viewer, changed, snapshot)).map((q) => [q.name, q]));
+      const fetched = new Map((await fetchQueries(this.client(token, true), snapshot.viewer, changed, snapshot, this.tracker()))
+        .map((q) => [q.name, q]));
       const current = this.snapshot ?? snapshot;
       const old = new Map((current.queries ?? []).map((q) => [q.name, q]));
       this.snapshot = {
@@ -388,6 +428,7 @@ export class Store implements vscode.Disposable {
       }
     } finally {
       this.busy = false;
+      this.progress = null;
       this.changed.fire();
       this.next();
     }

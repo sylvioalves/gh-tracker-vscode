@@ -31,6 +31,8 @@ body {
 }
 .group:hover { background: var(--vscode-list-hoverBackground); }
 .gcount { margin-left: auto; color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+.gprogress { display: inline-flex; align-items: center; gap: 4px; }
+.gprogress .codicon { font-size: 12px; }
 .tw { width: 16px; flex: none; }
 .card {
   display: grid;

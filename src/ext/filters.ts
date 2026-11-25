@@ -1,19 +1,25 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { FromEditor, ToEditor } from '../core/filter-messages.ts';
-import { customQueries, GithubError, httpGql, repoLabels, searchPreview, type Gql, type RepoLabel } from '../core/github.ts';
+import { customQueries, GithubError, repoLabels, searchPreview, type Gql, type RepoLabel, type SearchPreview } from '../core/github.ts';
 import { getToken } from './auth.ts';
-import { settings } from './store.ts';
+import { githubClient, settings } from './store.ts';
+import { clock } from './util.ts';
+
+const PREVIEW_TTL_MS = 60_000;
 
 async function client(): Promise<Gql> {
   const token = await getToken(false);
   if (!token) {
     throw new Error('Not signed in to GitHub');
   }
-  return httpGql(token);
+  return githubClient(token, true);
 }
 
 function errorText(err: unknown): string {
+  if (err instanceof GithubError && err.resetAt) {
+    return `GitHub rate limit reached, try again at ${clock(err.resetAt)}`;
+  }
   return err instanceof GithubError && err.status === 401 ? 'GitHub rejected the token' : (err as Error).message;
 }
 
@@ -28,6 +34,7 @@ export class FiltersEditor implements vscode.Disposable {
   private readonly media: vscode.Uri;
   private readonly subs: vscode.Disposable[] = [];
   private readonly labels = new Map<string, Promise<RepoLabel[]>>();
+  private readonly previews = new Map<string, { at: number; result: SearchPreview }>();
   private ready = false;
   private pending: ToEditor[] = [];
 
@@ -122,7 +129,12 @@ export class FiltersEditor implements vscode.Disposable {
       }
       case 'preview': {
         try {
-          this.post({ type: 'preview', seq: msg.seq, result: await searchPreview(await client(), msg.query) });
+          const hit = this.previews.get(msg.query);
+          const result = hit && Date.now() - hit.at < PREVIEW_TTL_MS ? hit.result : await searchPreview(await client(), msg.query);
+          if (hit?.result !== result) {
+            this.previews.set(msg.query, { at: Date.now(), result });
+          }
+          this.post({ type: 'preview', seq: msg.seq, result });
         } catch (err) {
           this.post({ type: 'previewError', seq: msg.seq, message: errorText(err) });
         }

@@ -83,14 +83,14 @@ test('fetchSnapshot merges roles, follows pages and resolves extra PRs', async (
     }
     const ids = vars.ids as string[];
     detailCalls.push(ids);
-    return { nodes: ids.map((id, i) => ({ ...raw, id, number: 1000 + id.charCodeAt(0) + i })) };
+    return { nodes: ids.map((id) => ({ ...raw, id, number: 1000 + id.charCodeAt(0) })) };
   };
   const snap = await fetchSnapshot(gql, { repos: ['zephyrproject-rtos/zephyr'], labels: [], extra: [{ repo: 'x/y', number: 7 }] });
   assert.equal(snap.viewer, 'me');
   assert.equal(snap.rateRemaining, 42);
   assert.equal(snap.prs.length, 4);
   assert.deepEqual(detailCalls.flat().sort(), ['A', 'B', 'C', 'D']);
-  const rolesOf = (id: string): string[] => snap.roles[`zephyrproject-rtos/zephyr#${1000 + id.charCodeAt(0) + detailCalls[0]!.indexOf(id)}`]!.sort();
+  const rolesOf = (id: string): string[] => snap.roles[`zephyrproject-rtos/zephyr#${1000 + id.charCodeAt(0)}`]!.sort();
   assert.deepEqual(rolesOf('B'), ['assigned', 'reviewed']);
   assert.deepEqual(rolesOf('D'), ['extra']);
 });
@@ -341,7 +341,7 @@ test('httpGql reports the rate budget and names the reset on a refusal', async (
   let next = response(200, { data: { ok: 1 } }, { 'x-ratelimit-remaining': '4999', 'x-ratelimit-reset': '1795577400' });
   const gql = httpGql('t', async () => next, (r) => seen.push(r));
   assert.deepEqual(await gql('q'), { ok: 1 });
-  assert.deepEqual(seen, [{ remaining: 4999, resetAt: new Date(1795577400 * 1000).toISOString() }]);
+  assert.deepEqual(seen, [{ remaining: 4999, limit: 5000, resetAt: new Date(1795577400 * 1000).toISOString() }]);
 
   next = response(200, { errors: [{ type: 'RATE_LIMITED', message: 'API rate limit already exceeded' }] }, reset);
   await assert.rejects(gql('q'), (err: GithubError) => err.resetAt === new Date(1795577400 * 1000).toISOString());

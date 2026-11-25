@@ -137,7 +137,13 @@ function groupHeader(g: PanelGroup): HTMLElement {
   h.append(icon(isOpen ? 'chevron-down' : 'chevron-right', 'tw'));
   h.append(el('span', 'glabel', g.label));
   const unseen = g.rows.filter((r) => r.unseen).length;
-  h.append(el('span', 'gcount', unseen > 0 ? `${g.rows.length} · ${unseen} new` : String(g.rows.length)));
+  if (g.progress !== undefined && g.progress < 100) {
+    const p = el('span', 'gcount gprogress', `${g.progress}%`);
+    p.prepend(icon('loading', 'codicon-modifier-spin'));
+    h.append(p);
+  } else {
+    h.append(el('span', 'gcount', unseen > 0 ? `${g.rows.length} · ${unseen} new` : String(g.rows.length)));
+  }
   h.addEventListener('click', () => toggle(g.id, g.myTurn));
   h.draggable = true;
   h.dataset.group = g.id;
@@ -293,7 +299,7 @@ function render(): void {
   } else if (status.kind === 'limited') {
     root.append(message(status.message ?? 'GitHub rate limit reached.', 'watch'));
   } else if (status.kind === 'loading' && groups.length === 0) {
-    root.append(message('Loading pull requests...', 'loading codicon-modifier-spin'));
+    root.append(message(status.message ?? 'Loading pull requests...', 'loading codicon-modifier-spin'));
   } else if (groups.length === 0) {
     root.append(message('Nothing waiting on you.', 'check'));
   }

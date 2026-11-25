@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
-import { panelData } from '../core/panel-data.ts';
+import { overallProgress, panelData } from '../core/panel-data.ts';
 import { ago } from '../core/view.ts';
 import type { Target } from './commands.ts';
-import type { Store } from './store.ts';
+import { lastRate, type Store } from './store.ts';
 import { clock, sessionExpired } from './util.ts';
 
 const ALLOWED = /^ghtracker\.[A-Za-z]+$/;
@@ -59,15 +59,19 @@ export class PrPanel implements vscode.WebviewViewProvider, vscode.Disposable {
     const unseen = store.myTurn.filter((r) => r.unseen).length;
     view.badge = unseen > 0 ? { value: unseen, tooltip: `${unseen} pull requests changed on your turn` } : undefined;
     const st = store.status;
-    view.description = st.kind === 'loading' ? 'refreshing...'
+    const overall = overallProgress(store.progress);
+    const rate = lastRate();
+    const budget = rate ? `, API ${Math.floor((rate.remaining / rate.limit) * 100)}% left` : '';
+    view.description = st.kind === 'loading' ? `refreshing ${overall ?? 0}%`
       : st.kind === 'limited' ? `rate limited until ${clock(st.until)}`
-      : (store.fetchedAt ? `updated ${ago(store.fetchedAt)}` : '');
+      : (store.fetchedAt ? `updated ${ago(store.fetchedAt)}${budget}` : '');
     if (!view.visible) {
       return;
     }
-    const groups = panelData(store.groups, { expired: sessionExpired, pinned: (k) => store.isPinned(k) });
+    const groups = panelData(store.groups, { expired: sessionExpired, pinned: (k) => store.isPinned(k), progress: store.progress });
     const status = st.kind === 'error' ? { kind: 'error', message: st.message }
       : st.kind === 'limited' ? { kind: 'limited', message: `GitHub rate limit reached. Next refresh at ${clock(st.until)}.` }
+      : st.kind === 'loading' ? { kind: 'loading', message: `Loading pull requests... ${overall ?? 0}%` }
       : { kind: st.kind };
     void view.webview.postMessage({ type: 'data', groups, status });
   }

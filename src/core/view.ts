@@ -1,5 +1,6 @@
 import { classify, type Ack, type Bucket, type Classified } from './classify.ts';
 import { FOCUS_TEXT } from './filter-focus.ts';
+import { queryKey } from './progress.ts';
 import { prKey, type Issue, type PullRequest, type QueryResult, type Snapshot } from './github.ts';
 import type { Ledger } from './ledger.ts';
 import type { Session } from './sessions.ts';
@@ -163,7 +164,7 @@ export function buildView(input: ViewInput): Group[] {
     rows: all.filter((r) => r.bucket === g.id).sort(newestFirst),
   }));
   const custom = (input.snapshot.queries ?? []).map((q): Group => ({
-    id: `query:${q.name}`,
+    id: queryKey(q.name),
     label: q.name,
     myTurn: false,
     rows: [...q.prs.map((pr) => prRow(pr, input)), ...q.issues.map((i) => issueRow(i, input))]

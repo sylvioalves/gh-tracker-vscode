@@ -1,4 +1,5 @@
 import { eventAt, FOCUS_EVENTS, queryFocus, type Focus } from './filter-focus.ts';
+import { PRS_KEY, Progress, queryKey, type Phase } from './progress.ts';
 
 export type Gql = (query: string, variables?: Record<string, unknown>) => Promise<any>;
 
@@ -16,16 +17,18 @@ export class GithubError extends Error {
 
 export interface RateInfo {
   remaining: number;
+  limit: number;
   resetAt: string;
 }
 
 export function rateFromHeaders(headers: Headers): RateInfo | null {
   const remaining = Number(headers.get('x-ratelimit-remaining') ?? NaN);
   const reset = Number(headers.get('x-ratelimit-reset') ?? NaN);
+  const limit = Number(headers.get('x-ratelimit-limit') ?? NaN);
   if (!Number.isFinite(remaining) || !Number.isFinite(reset)) {
     return null;
   }
-  return { remaining, resetAt: new Date(reset * 1000).toISOString() };
+  return { remaining, limit: Number.isFinite(limit) && limit > 0 ? limit : 5000, resetAt: new Date(reset * 1000).toISOString() };
 }
 
 function limitedUntil(res: Response, rate: RateInfo | null, now: number): string | null {
@@ -43,11 +46,12 @@ const ENDPOINT = 'https://api.github.com/graphql';
 const TIMEOUT_MS = 60_000;
 const SEARCH_PAGE = 100;
 const SEARCH_PAGES_MAX = 5;
-const DETAIL_BATCH = 50;
+const DETAIL_BATCH = 10;
 const THREADS_BATCH = 10;
 const THREADS_MAX_AGE_MS = 60 * 60 * 1000;
 const LIMIT_FALLBACK_MS = 5 * 60 * 1000;
-const DETAIL_PARALLEL = 3;
+const DETAIL_PARALLEL = 6;
+const SEARCH_PARALLEL = 4;
 const ITEM_PAGE = 50;
 const ITEM_PAGES_MAX = 2;
 const QUERY_MAX = 256;
@@ -482,6 +486,16 @@ async function resolveRefs(gql: Gql, refs: PrRef[]): Promise<string[]> {
   return refs.map((_, i) => data[`r${i}`]?.pullRequest?.id).filter((id): id is string => Boolean(id));
 }
 
+async function pool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      await fn(items[next++]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
 /* GitHub times out on large documents: a batch that fails with a
  * server error is split in halves until single items remain.
  */
@@ -498,20 +512,17 @@ async function nodesBatch(gql: Gql, query: string, ids: string[], vars: Record<s
   }
 }
 
-async function nodes(gql: Gql, query: string, ids: string[], vars: Record<string, unknown> = {}, size = DETAIL_BATCH): Promise<any[]> {
+async function nodes(gql: Gql, query: string, ids: string[], vars: Record<string, unknown>, size: number,
+  onBatch?: (ids: string[]) => void): Promise<any[]> {
   const batches: string[][] = [];
   for (let i = 0; i < ids.length; i += size) {
     batches.push(ids.slice(i, i + size));
   }
   const answers: any[] = [];
-  let next = 0;
-  const worker = async (): Promise<void> => {
-    while (next < batches.length) {
-      const i = next++;
-      answers.push(...await nodesBatch(gql, query, batches[i]!, vars));
-    }
-  };
-  await Promise.all(Array.from({ length: DETAIL_PARALLEL }, worker));
+  await pool(batches, DETAIL_PARALLEL, async (batch) => {
+    answers.push(...await nodesBatch(gql, query, batch, vars));
+    onBatch?.(batch);
+  });
   return answers.filter((n) => n?.id);
 }
 
@@ -527,13 +538,13 @@ function previousPrs(previous: Snapshot | null | undefined): Map<string, PullReq
   return new Map(all.map((pr) => [pr.id, pr]));
 }
 
-/* Fills the threads of the pull requests that need them. Threads of
- * the previous snapshot are kept while the pull request has not been
- * updated since and they are younger than THREADS_MAX_AGE_MS.
+/* Copies threads from the previous snapshot while the pull request has
+ * not been updated since and they are younger than THREADS_MAX_AGE_MS.
+ * Returns the pull requests whose threads must be fetched.
  */
-async function withThreads(gql: Gql, prs: PullRequest[], viewer: string, previous: Snapshot | null | undefined, now: number): Promise<void> {
+function reuseThreads(prs: PullRequest[], viewer: string, previous: Snapshot | null | undefined, now: number): PullRequest[] {
   const cached = previousPrs(previous);
-  const stale = new Map<string, PullRequest[]>();
+  const stale: PullRequest[] = [];
   for (const pr of prs) {
     if (!needsThreads(pr, viewer)) {
       continue;
@@ -543,61 +554,19 @@ async function withThreads(gql: Gql, prs: PullRequest[], viewer: string, previou
       pr.threads = old.threads;
       pr.threadsAt = old.threadsAt;
     } else {
-      stale.set(pr.id, [...(stale.get(pr.id) ?? []), pr]);
+      stale.push(pr);
     }
   }
-  const at = new Date(now).toISOString();
-  for (const node of await nodes(gql, THREADS_QUERY, [...stale.keys()], {}, THREADS_BATCH)) {
-    for (const pr of stale.get(node.id) ?? []) {
-      pr.threads = threadsOf(node);
-      pr.threadsAt = at;
-    }
-  }
-}
-
-async function details(gql: Gql, ids: string[], viewer: string, previous: Snapshot | null | undefined): Promise<Map<string, PullRequest>> {
-  const byId = new Map<string, PullRequest>();
-  for (const node of await nodes(gql, DETAIL_QUERY, ids, { me: viewer })) {
-    const pr = normalize(node);
-    byId.set(pr.id, pr);
-  }
-  await withThreads(gql, [...byId.values()], viewer, previous, Date.now());
-  return byId;
+  return stale;
 }
 
 interface CustomSearch {
   name: string;
+  key: string;
   query: string;
   focus: Focus;
   prIds: string[];
   issues: Issue[];
-}
-
-async function searchCustom(gql: Gql, viewer: string, queries: CustomQuery[]): Promise<CustomSearch[]> {
-  const out: CustomSearch[] = [];
-  for (const q of queries) {
-    out.push({ name: q.name, query: q.query, focus: queryFocus(q.query, viewer), ...await searchItems(gql, q.query) });
-  }
-  return out;
-}
-
-/* Event times per node id for the items of every filter whose focus
- * needs a fetch. Items of several filters are fetched once per focus.
- */
-async function fetchEvents(gql: Gql, viewer: string, custom: CustomSearch[]): Promise<Map<Focus, Map<string, string>>> {
-  const out = new Map<Focus, Map<string, string>>();
-  for (const focus of Object.keys(FOCUS_EVENTS) as Focus[]) {
-    const ids = [...new Set(custom.filter((c) => c.focus === focus).flatMap((c) => [...c.prIds, ...c.issues.map((i) => i.id)]))];
-    if (ids.length === 0) {
-      continue;
-    }
-    const times = new Map<string, string>();
-    for (const node of await nodes(gql, eventQuery(focus)!, ids)) {
-      times.set(node.id, eventAt(focus, node, viewer));
-    }
-    out.set(focus, times);
-  }
-  return out;
 }
 
 function assembleQueries(custom: CustomSearch[], byId: Map<string, PullRequest>, viewer: string,
@@ -613,53 +582,170 @@ function assembleQueries(custom: CustomSearch[], byId: Map<string, PullRequest>,
   });
 }
 
-/* Results of custom filters alone, for a settings change between polls. */
-export async function fetchQueries(gql: Gql, viewer: string, queries: CustomQuery[], previous?: Snapshot | null): Promise<QueryResult[]> {
-  const custom = await searchCustom(gql, viewer, queries);
-  const byId = await details(gql, [...new Set(custom.flatMap((c) => c.prIds))], viewer, previous);
-  return assembleQueries(custom, byId, viewer, await fetchEvents(gql, viewer, custom));
+interface CollectInput {
+  searches: { role: Role; q: string }[];
+  extra: PrRef[];
+  queries: CustomQuery[];
+  previous?: Snapshot | null | undefined;
+  progress?: Progress | undefined;
 }
 
-export async function fetchSnapshot(gql: Gql, plan: Plan): Promise<Snapshot> {
-  const head = await gql(VIEWER_QUERY);
-  const viewer: string = head.viewer.login;
+interface Collected {
+  rolesById: Map<string, Set<Role>>;
+  byId: Map<string, PullRequest>;
+  queries: QueryResult[];
+}
+
+/* Searches, details, threads and filter events, each step in parallel
+ * where GitHub allows. Progress is reported per group key.
+ */
+async function collect(gql: Gql, viewer: string, input: CollectInput): Promise<Collected> {
+  const progress = input.progress ?? new Progress();
+  const roles = input.searches.length > 0 || input.extra.length > 0;
+  const custom: CustomSearch[] = input.queries.map((q) => ({
+    name: q.name, key: queryKey(q.name), query: q.query, focus: queryFocus(q.query, viewer), prIds: [], issues: [],
+  }));
+  const keys = [...(roles ? [PRS_KEY] : []), ...custom.map((c) => c.key)];
+  if (roles) {
+    progress.plan(PRS_KEY, 'search', input.searches.length + (input.extra.length > 0 ? 1 : 0));
+  }
+  for (const c of custom) {
+    progress.plan(c.key, 'search', 1);
+  }
+
   const rolesById = new Map<string, Set<Role>>();
   const add = (id: string, role: Role): void => {
-    let set = rolesById.get(id);
-    if (!set) {
-      set = new Set();
-      rolesById.set(id, set);
-    }
-    set.add(role);
+    rolesById.set(id, (rolesById.get(id) ?? new Set()).add(role));
   };
-  for (const s of searches(plan)) {
-    for (const id of await searchIds(gql, s.q)) {
-      add(id, s.role);
+  const jobs: (() => Promise<void>)[] = [
+    ...input.searches.map((s) => async () => {
+      for (const id of await searchIds(gql, s.q)) {
+        add(id, s.role);
+      }
+      progress.tick(PRS_KEY, 'search');
+    }),
+    ...custom.map((c) => async () => {
+      Object.assign(c, await searchItems(gql, c.query));
+      progress.tick(c.key, 'search');
+    }),
+  ];
+  if (input.extra.length > 0) {
+    jobs.push(async () => {
+      for (const id of await resolveRefs(gql, input.extra)) {
+        add(id, 'extra');
+      }
+      progress.tick(PRS_KEY, 'search');
+    });
+  }
+  await pool(jobs, SEARCH_PARALLEL, (job) => job());
+
+  const owners = new Map<string, Set<string>>();
+  const own = (id: string, key: string): void => {
+    owners.set(id, (owners.get(id) ?? new Set()).add(key));
+  };
+  for (const id of rolesById.keys()) {
+    own(id, PRS_KEY);
+  }
+  for (const c of custom) {
+    for (const id of c.prIds) {
+      own(id, c.key);
     }
   }
-  for (const id of await resolveRefs(gql, plan.extra)) {
-    add(id, 'extra');
+  const count = (ids: Iterable<string>): Map<string, number> => {
+    const n = new Map<string, number>();
+    for (const id of ids) {
+      for (const key of owners.get(id) ?? []) {
+        n.set(key, (n.get(key) ?? 0) + 1);
+      }
+    }
+    return n;
+  };
+  const tickOwners = (phase: Phase) => (ids: string[]): void => {
+    for (const [key, n] of count(ids)) {
+      progress.tick(key, phase, n);
+    }
+  };
+
+  const ids = [...owners.keys()];
+  const detailCounts = count(ids);
+  for (const key of keys) {
+    progress.plan(key, 'detail', detailCounts.get(key) ?? 0);
   }
-  const custom = await searchCustom(gql, viewer, plan.queries ?? []);
-  const ids = [...new Set([...rolesById.keys(), ...custom.flatMap((c) => c.prIds)])];
+  const byId = new Map<string, PullRequest>();
+  for (const node of await nodes(gql, DETAIL_QUERY, ids, { me: viewer }, DETAIL_BATCH, tickOwners('detail'))) {
+    const pr = normalize(node);
+    byId.set(pr.id, pr);
+  }
+
+  const stale = reuseThreads([...byId.values()], viewer, input.previous, Date.now());
+  const withEvents = custom.filter((c) => FOCUS_EVENTS[c.focus]);
+  const finish = count(stale.map((pr) => pr.id));
+  for (const c of withEvents) {
+    finish.set(c.key, (finish.get(c.key) ?? 0) + c.prIds.length + c.issues.length);
+  }
+  for (const key of keys) {
+    progress.plan(key, 'finish', finish.get(key) ?? 0);
+  }
+
+  const threadsAt = new Date().toISOString();
+  const events = new Map<Focus, Map<string, string>>();
+  const focuses = [...new Set(withEvents.map((c) => c.focus))];
+  await Promise.all([
+    nodes(gql, THREADS_QUERY, stale.map((pr) => pr.id), {}, THREADS_BATCH, tickOwners('finish')).then((found) => {
+      for (const node of found) {
+        const pr = byId.get(node.id);
+        if (pr) {
+          pr.threads = threadsOf(node);
+          pr.threadsAt = threadsAt;
+        }
+      }
+    }),
+    ...focuses.map(async (focus) => {
+      const mine = withEvents.filter((c) => c.focus === focus).map((c) => ({ key: c.key, ids: new Set([...c.prIds, ...c.issues.map((i) => i.id)]) }));
+      const list = [...new Set(mine.flatMap((m) => [...m.ids]))];
+      const times = new Map<string, string>();
+      const onBatch = (batch: string[]): void => {
+        for (const m of mine) {
+          progress.tick(m.key, 'finish', batch.filter((id) => m.ids.has(id)).length);
+        }
+      };
+      for (const node of await nodes(gql, eventQuery(focus)!, list, {}, DETAIL_BATCH, onBatch)) {
+        times.set(node.id, eventAt(focus, node, viewer));
+      }
+      events.set(focus, times);
+    }),
+  ]);
+  return { rolesById, byId, queries: assembleQueries(custom, byId, viewer, events) };
+}
+
+/* Results of custom filters alone, for a settings change between polls. */
+export async function fetchQueries(gql: Gql, viewer: string, queries: CustomQuery[], previous?: Snapshot | null,
+  progress?: Progress): Promise<QueryResult[]> {
+  return (await collect(gql, viewer, { searches: [], extra: [], queries, previous, progress })).queries;
+}
+
+export async function fetchSnapshot(gql: Gql, plan: Plan, progress?: Progress): Promise<Snapshot> {
+  const head = await gql(VIEWER_QUERY);
+  const viewer: string = head.viewer.login;
+  const got = await collect(gql, viewer, {
+    searches: searches(plan), extra: plan.extra, queries: plan.queries ?? [], previous: plan.previous, progress,
+  });
   const prs: PullRequest[] = [];
   const roles: Record<string, Role[]> = {};
-  const byId = await details(gql, ids, viewer, plan.previous);
-  for (const pr of byId.values()) {
-    const set = rolesById.get(pr.id);
-    if (set) {
+  for (const [id, set] of got.rolesById) {
+    const pr = got.byId.get(id);
+    if (pr) {
       prs.push(pr);
       roles[prKey(pr.repo, pr.number)] = [...set];
     }
   }
-  const queries = assembleQueries(custom, byId, viewer, await fetchEvents(gql, viewer, custom));
   return {
     viewer,
     fetchedAt: new Date().toISOString(),
     prs,
     roles,
     rateRemaining: head.rateLimit?.remaining ?? null,
-    queries,
+    queries: got.queries,
   };
 }
 
