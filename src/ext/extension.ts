@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { registerCommands } from './commands.ts';
 import { registerFilterCommands } from './filters.ts';
 import { PrPanel } from './panel.ts';
-import { settings, Store } from './store.ts';
+import { settings, SNAPSHOT_FILE, Store } from './store.ts';
 
 function watch(context: vscode.ExtensionContext, file: string, onChange: () => void): void {
   const uri = vscode.Uri.file(file);
@@ -68,6 +68,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const s = settings();
   watch(context, `${s.ledgerDir}/*.md`, reloadLocal);
   watch(context, s.sessionIndex, reloadLocal);
+  let reloadShared: NodeJS.Timeout | undefined;
+  watch(context, vscode.Uri.joinPath(context.globalStorageUri, SNAPSHOT_FILE).fsPath, () => {
+    clearTimeout(reloadShared);
+    reloadShared = setTimeout(() => void store.reloadSnapshot(), 300);
+  });
 
   context.subscriptions.push(
     store,
@@ -75,8 +80,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     bar,
     vscode.window.registerWebviewViewProvider(PrPanel.id, panel, { webviewOptions: { retainContextWhenHidden: true } }),
     store.onDidChange(render),
-    vscode.commands.registerCommand('ghtracker.refresh', () => store.refresh(false)),
-    vscode.commands.registerCommand('ghtracker.signIn', () => store.refresh(true)),
+    vscode.commands.registerCommand('ghtracker.refresh', () => store.refresh(false, true)),
+    vscode.commands.registerCommand('ghtracker.signIn', () => store.refresh(true, true)),
     vscode.commands.registerCommand('ghtracker.collapseAll', () => panel.collapseAll()),
     vscode.commands.registerCommand('ghtracker.markAllSeen', () => store.markSeen(store.groups.flatMap((g) => g.rows).map((r) => r.key))),
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -84,6 +89,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       store.reloadLocal();
+      if (!store.leader) {
+        return;
+      }
       if (['repos', 'watchedLabels', 'pollMinutes'].some((k) => e.affectsConfiguration(`ghtracker.${k}`))) {
         void store.refresh(false);
       } else if (e.affectsConfiguration('ghtracker.queries')) {

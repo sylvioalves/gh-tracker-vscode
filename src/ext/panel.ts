@@ -4,7 +4,7 @@ import { panelData } from '../core/panel-data.ts';
 import { ago } from '../core/view.ts';
 import type { Target } from './commands.ts';
 import type { Store } from './store.ts';
-import { sessionExpired } from './util.ts';
+import { clock, sessionExpired } from './util.ts';
 
 const ALLOWED = /^ghtracker\.[A-Za-z]+$/;
 
@@ -58,12 +58,17 @@ export class PrPanel implements vscode.WebviewViewProvider, vscode.Disposable {
     const store = this.store;
     const unseen = store.myTurn.filter((r) => r.unseen).length;
     view.badge = unseen > 0 ? { value: unseen, tooltip: `${unseen} pull requests changed on your turn` } : undefined;
-    view.description = store.status.kind === 'loading' ? 'refreshing...' : (store.fetchedAt ? `updated ${ago(store.fetchedAt)}` : '');
+    const st = store.status;
+    view.description = st.kind === 'loading' ? 'refreshing...'
+      : st.kind === 'limited' ? `rate limited until ${clock(st.until)}`
+      : (store.fetchedAt ? `updated ${ago(store.fetchedAt)}` : '');
     if (!view.visible) {
       return;
     }
     const groups = panelData(store.groups, { expired: sessionExpired, pinned: (k) => store.isPinned(k) });
-    const status = store.status.kind === 'error' ? { kind: 'error', message: store.status.message } : { kind: store.status.kind };
+    const status = st.kind === 'error' ? { kind: 'error', message: st.message }
+      : st.kind === 'limited' ? { kind: 'limited', message: `GitHub rate limit reached. Next refresh at ${clock(st.until)}.` }
+      : { kind: st.kind };
     void view.webview.postMessage({ type: 'data', groups, status });
   }
 

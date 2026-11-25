@@ -1,7 +1,8 @@
 import { homedir } from 'node:os';
 import * as vscode from 'vscode';
 import type { Ack } from '../core/classify.ts';
-import { customQueries, fetchQueries, fetchSnapshot, GithubError, httpGql, type CustomQuery, type PrRef, type QueryResult, type Snapshot } from '../core/github.ts';
+import { customQueries, fetchQueries, fetchSnapshot, GithubError, httpGql, type CustomQuery, type Gql, type PrRef, type QueryResult, type RateInfo, type Snapshot } from '../core/github.ts';
+import { Lease } from '../core/lease.ts';
 import { loadLedgers, type Ledger } from '../core/ledger.ts';
 import { loadSessionIndex, type Session } from '../core/sessions.ts';
 import { buildView, orderGroups, type Group, type Row, type ViewRow } from '../core/view.ts';
@@ -9,7 +10,12 @@ import { getToken } from './auth.ts';
 
 const RETRY_MIN_MS = 2 * 60 * 1000;
 const RETRY_MAX_MS = 30 * 60 * 1000;
-const SNAPSHOT_FILE = 'snapshot.json';
+export const SNAPSHOT_FILE = 'snapshot.json';
+/* Points kept free for other tools; automatic polls stop below it. */
+const RATE_RESERVE = 500;
+const RESET_SLACK_MS = 5000;
+const LEASE_TICK_MS = 30_000;
+const LEASE_STALE_MS = 90_000;
 const ACKS = 'acks';
 const SEEN = 'seen';
 const PINS = 'pins';
@@ -46,6 +52,7 @@ export type Status =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'signedOut' }
+  | { kind: 'limited'; until: string }
   | { kind: 'error'; message: string };
 
 export class Store implements vscode.Disposable {
@@ -59,12 +66,22 @@ export class Store implements vscode.Disposable {
   private busy = false;
   private again = false;
   private queriesStale = false;
+  private rate: RateInfo | null = null;
+  private readonly lease: Lease;
+  private leaseTimer: NodeJS.Timeout | undefined;
+  private lastText = '';
   private cache: Group[] = [];
   private readonly context: vscode.ExtensionContext;
   status: Status = { kind: 'idle' };
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
+    this.lease = new Lease(context.globalStorageUri.fsPath, { staleMs: LEASE_STALE_MS });
+  }
+
+  /* Whether this window polls GitHub. */
+  get leader(): boolean {
+    return this.lease.held;
   }
 
   get fetchedAt(): string | null {
@@ -81,19 +98,100 @@ export class Store implements vscode.Disposable {
 
   async start(): Promise<void> {
     this.reloadLocal();
-    try {
-      const uri = vscode.Uri.joinPath(this.context.globalStorageUri, SNAPSHOT_FILE);
-      this.snapshot = JSON.parse(Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8'));
-    } catch {
-      this.snapshot = null;
-    }
-    this.recompute();
-    await this.refresh(false);
+    await this.reloadSnapshot();
+    this.tickLease();
+    this.leaseTimer = setInterval(() => this.tickLease(), LEASE_TICK_MS);
   }
 
   dispose(): void {
     clearTimeout(this.timer);
+    clearInterval(this.leaseTimer);
+    this.lease.release();
     this.changed.dispose();
+  }
+
+  private tickLease(): void {
+    const was = this.lease.held;
+    try {
+      this.lease.tick();
+    } catch (err) {
+      console.error('GH Tracker: poll lease failed', err);
+    }
+    if (this.lease.held && !was) {
+      this.resume();
+    } else if (!this.lease.held && was) {
+      clearTimeout(this.timer);
+    }
+  }
+
+  /* Next poll on taking the lease: at once when the snapshot is older
+   * than the poll interval, otherwise when it falls due.
+   */
+  private resume(): void {
+    const age = this.snapshot ? Date.now() - Date.parse(this.snapshot.fetchedAt) : Infinity;
+    const due = settings().pollMs - age;
+    if (due <= 0 || !Number.isFinite(due)) {
+      void this.refresh(false);
+    } else {
+      this.schedule(due);
+    }
+  }
+
+  /* Picks up the snapshot another window wrote. */
+  async reloadSnapshot(): Promise<void> {
+    if (this.busy) {
+      return;
+    }
+    let text: string;
+    try {
+      const uri = vscode.Uri.joinPath(this.context.globalStorageUri, SNAPSHOT_FILE);
+      text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+    } catch {
+      return;
+    }
+    if (text === this.lastText) {
+      return;
+    }
+    try {
+      this.snapshot = JSON.parse(text);
+    } catch {
+      return;
+    }
+    this.lastText = text;
+    this.recompute();
+    if (this.lease.held && !this.busy) {
+      this.resume();
+    }
+  }
+
+  /* When GitHub should not be asked yet: the budget is spent, or for
+   * automatic polls it is below the reserve.
+   */
+  private blockedUntil(manual: boolean): string | null {
+    const r = this.rate;
+    if (!r || Date.parse(r.resetAt) <= Date.now()) {
+      return null;
+    }
+    return r.remaining <= 0 || (!manual && r.remaining < RATE_RESERVE) ? r.resetAt : null;
+  }
+
+  private client(token: string, manual: boolean): Gql {
+    const gql = httpGql(token, fetch, (rate) => {
+      this.rate = rate;
+    });
+    return async (query, variables) => {
+      const until = this.blockedUntil(manual);
+      if (until) {
+        throw new GithubError(0, 'GitHub rate limit reserve reached', until);
+      }
+      return gql(query, variables);
+    };
+  }
+
+  /* Status and delay after a GitHub refusal for rate limiting. */
+  private limited(until: string): number {
+    this.status = { kind: 'limited', until };
+    return Math.max(0, Date.parse(until) - Date.now()) + RESET_SLACK_MS;
   }
 
   /* Ledgers and the session index change on disk without a GitHub poll. */
@@ -104,7 +202,7 @@ export class Store implements vscode.Disposable {
     this.sessions = loadSessionIndex(s.sessionIndex);
     this.recompute();
     const added = [...this.ledgers.keys()].some((k) => !before.has(k));
-    if (added && before.size > 0) {
+    if (added && before.size > 0 && this.lease.held) {
       void this.refresh(false);
     }
   }
@@ -167,15 +265,27 @@ export class Store implements vscode.Disposable {
 
   private schedule(ms: number): void {
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.refresh(false), ms);
+    this.timer = setTimeout(() => {
+      if (this.lease.held) {
+        void this.refresh(false);
+      }
+    }, ms);
   }
 
-  async refresh(interactive: boolean): Promise<void> {
+  /* A manual refresh comes from the user and may use the reserve. */
+  async refresh(interactive: boolean, manual = false): Promise<void> {
     if (this.busy) {
       this.again = true;
       return;
     }
     const s = settings();
+    const blocked = this.blockedUntil(manual);
+    if (blocked) {
+      this.schedule(this.limited(blocked));
+      this.changed.fire();
+      return;
+    }
+    let delay: number | null = null;
     this.busy = true;
     this.status = { kind: 'loading' };
     this.changed.fire();
@@ -187,7 +297,9 @@ export class Store implements vscode.Disposable {
         this.status = { kind: 'signedOut' };
         return;
       }
-      this.snapshot = await fetchSnapshot(httpGql(token), { repos: s.repos, labels: s.labels, extra: this.plan(s), queries: s.queries });
+      this.snapshot = await fetchSnapshot(this.client(token, manual), {
+        repos: s.repos, labels: s.labels, extra: this.plan(s), queries: s.queries, previous: this.snapshot,
+      });
       await this.persist();
       this.failures = 0;
       this.status = { kind: 'idle' };
@@ -196,15 +308,19 @@ export class Store implements vscode.Disposable {
         this.announce(this.myTurn.filter((r) => r.unseen && !before.has(r.key)));
       }
     } catch (err) {
-      this.failures++;
-      const message = err instanceof GithubError && err.status === 401
-        ? 'GitHub rejected the token' : (err as Error).message;
-      this.status = { kind: 'error', message };
+      if (err instanceof GithubError && err.resetAt) {
+        delay = this.limited(err.resetAt);
+      } else {
+        this.failures++;
+        const message = err instanceof GithubError && err.status === 401
+          ? 'GitHub rejected the token' : (err as Error).message;
+        this.status = { kind: 'error', message };
+      }
     } finally {
       this.busy = false;
       const retry = Math.min(RETRY_MAX_MS, RETRY_MIN_MS * 2 ** Math.max(0, this.failures - 1));
       if (this.status.kind !== 'signedOut') {
-        this.schedule(this.failures > 0 ? retry : s.pollMs);
+        this.schedule(delay ?? (this.failures > 0 ? retry : s.pollMs));
       }
       this.changed.fire();
       this.next();
@@ -252,7 +368,7 @@ export class Store implements vscode.Disposable {
         this.status = { kind: 'signedOut' };
         return;
       }
-      const fetched = new Map((await fetchQueries(httpGql(token), snapshot.viewer, changed)).map((q) => [q.name, q]));
+      const fetched = new Map((await fetchQueries(this.client(token, true), snapshot.viewer, changed, snapshot)).map((q) => [q.name, q]));
       const current = this.snapshot ?? snapshot;
       const old = new Map((current.queries ?? []).map((q) => [q.name, q]));
       this.snapshot = {
@@ -263,9 +379,13 @@ export class Store implements vscode.Disposable {
       this.status = { kind: 'idle' };
       this.recompute();
     } catch (err) {
-      const message = err instanceof GithubError && err.status === 401
-        ? 'GitHub rejected the token' : (err as Error).message;
-      this.status = { kind: 'error', message };
+      if (err instanceof GithubError && err.resetAt) {
+        this.schedule(this.limited(err.resetAt));
+      } else {
+        const message = err instanceof GithubError && err.status === 401
+          ? 'GitHub rejected the token' : (err as Error).message;
+        this.status = { kind: 'error', message };
+      }
     } finally {
       this.busy = false;
       this.changed.fire();
@@ -276,7 +396,8 @@ export class Store implements vscode.Disposable {
   private async persist(): Promise<void> {
     await vscode.workspace.fs.createDirectory(this.context.globalStorageUri);
     const uri = vscode.Uri.joinPath(this.context.globalStorageUri, SNAPSHOT_FILE);
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(this.snapshot)));
+    this.lastText = JSON.stringify(this.snapshot);
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(this.lastText));
   }
 
   private announce(fresh: Row[]): void {
@@ -304,7 +425,7 @@ export class Store implements vscode.Disposable {
   async pin(ref: PrRef): Promise<void> {
     if (!this.isPinned(`${ref.repo}#${ref.number}`)) {
       await this.context.globalState.update(PINS, [...this.pins, ref]);
-      await this.refresh(false);
+      await this.refresh(false, true);
     }
   }
 

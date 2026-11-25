@@ -10,3 +10,7 @@ function claudeDir(): string {
 export function sessionExpired(s: Session): boolean {
   return !existsSync(transcriptPath(claudeDir(), s.cwd, s.id));
 }
+
+export function clock(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}

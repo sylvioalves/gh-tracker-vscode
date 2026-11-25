@@ -1,7 +1,7 @@
 import type { PanelGroup, PanelRow, PanelSession } from '../core/panel-data.ts';
 
 interface Status {
-  kind: 'idle' | 'loading' | 'signedOut' | 'error';
+  kind: 'idle' | 'loading' | 'signedOut' | 'limited' | 'error';
   message?: string;
 }
 
@@ -290,6 +290,8 @@ function render(): void {
     root.append(message('Not signed in to GitHub.', 'account', 'ghtracker.signIn', 'Sign in'));
   } else if (status.kind === 'error') {
     root.append(message(status.message ?? 'Error', 'warning', 'ghtracker.refresh', 'Retry'));
+  } else if (status.kind === 'limited') {
+    root.append(message(status.message ?? 'GitHub rate limit reached.', 'watch'));
   } else if (status.kind === 'loading' && groups.length === 0) {
     root.append(message('Loading pull requests...', 'loading codicon-modifier-spin'));
   } else if (groups.length === 0) {

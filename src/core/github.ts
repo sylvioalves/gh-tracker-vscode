@@ -4,24 +4,55 @@ export type Gql = (query: string, variables?: Record<string, unknown>) => Promis
 
 export class GithubError extends Error {
   readonly status: number;
+  /* When GitHub refused for rate limiting: the time it accepts again. */
+  readonly resetAt: string | null;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, resetAt: string | null = null) {
     super(message);
     this.status = status;
+    this.resetAt = resetAt;
   }
+}
+
+export interface RateInfo {
+  remaining: number;
+  resetAt: string;
+}
+
+export function rateFromHeaders(headers: Headers): RateInfo | null {
+  const remaining = Number(headers.get('x-ratelimit-remaining') ?? NaN);
+  const reset = Number(headers.get('x-ratelimit-reset') ?? NaN);
+  if (!Number.isFinite(remaining) || !Number.isFinite(reset)) {
+    return null;
+  }
+  return { remaining, resetAt: new Date(reset * 1000).toISOString() };
+}
+
+function limitedUntil(res: Response, rate: RateInfo | null, now: number): string | null {
+  const retryAfter = Number(res.headers.get('retry-after') ?? NaN);
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return new Date(now + retryAfter * 1000).toISOString();
+  }
+  if (res.status === 429 || (res.status === 403 && rate?.remaining === 0)) {
+    return rate?.resetAt ?? new Date(now + LIMIT_FALLBACK_MS).toISOString();
+  }
+  return null;
 }
 
 const ENDPOINT = 'https://api.github.com/graphql';
 const TIMEOUT_MS = 60_000;
 const SEARCH_PAGE = 100;
 const SEARCH_PAGES_MAX = 5;
-const DETAIL_BATCH = 10;
+const DETAIL_BATCH = 50;
+const THREADS_BATCH = 10;
+const THREADS_MAX_AGE_MS = 60 * 60 * 1000;
+const LIMIT_FALLBACK_MS = 5 * 60 * 1000;
 const DETAIL_PARALLEL = 3;
 const ITEM_PAGE = 50;
 const ITEM_PAGES_MAX = 2;
 const QUERY_MAX = 256;
 
-export function httpGql(token: string, fetchImpl: typeof fetch = fetch): Gql {
+export function httpGql(token: string, fetchImpl: typeof fetch = fetch, onRate?: (rate: RateInfo) => void): Gql {
   return async (query, variables = {}) => {
     for (let attempt = 0; ; attempt++) {
       const res = await fetchImpl(ENDPOINT, {
@@ -34,15 +65,22 @@ export function httpGql(token: string, fetchImpl: typeof fetch = fetch): Gql {
         body: JSON.stringify({ query, variables }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
+      const rate = rateFromHeaders(res.headers);
+      if (rate) {
+        onRate?.(rate);
+      }
       if (res.status >= 500 && attempt === 0) {
         continue;
       }
       if (!res.ok) {
-        throw new GithubError(res.status, `GitHub answered HTTP ${res.status}`);
+        const until = limitedUntil(res, rate, Date.now());
+        throw new GithubError(res.status, until ? 'GitHub rate limit reached' : `GitHub answered HTTP ${res.status}`, until);
       }
-      const body = (await res.json()) as { data?: unknown; errors?: { message: string }[] };
+      const body = (await res.json()) as { data?: unknown; errors?: { type?: string; message: string }[] };
       if (body.errors && body.errors.length > 0) {
-        throw new GithubError(200, body.errors.map((e) => e.message).join('; '));
+        const limited = body.errors.some((e) => e.type === 'RATE_LIMITED');
+        const until = limited ? rate?.resetAt ?? new Date(Date.now() + LIMIT_FALLBACK_MS).toISOString() : null;
+        throw new GithubError(200, limited ? 'GitHub rate limit reached' : body.errors.map((e) => e.message).join('; '), until);
       }
       return body.data;
     }
@@ -102,6 +140,8 @@ export interface PullRequest {
   myReview: Review | null;
   pendingReview: { id: string; at: string } | null;
   threads: Thread[];
+  /* When the threads were fetched, absent when they were not. */
+  threadsAt?: string;
 }
 
 export interface Comment {
@@ -145,6 +185,8 @@ export interface Plan {
   labels: string[];
   extra: PrRef[];
   queries?: CustomQuery[];
+  /* The last snapshot, whose review threads are reused while fresh. */
+  previous?: Snapshot | null;
 }
 
 export interface QueryResult {
@@ -187,11 +229,16 @@ const PR_FIELDS = `
   commits(last: 1) { nodes { commit { oid committedDate statusCheckRollup { state } } } }
   pushes: timelineItems(last: 1, itemTypes: [HEAD_REF_FORCE_PUSHED_EVENT]) {
     nodes { ... on HeadRefForcePushedEvent { createdAt } } }
+`;
+
+/* Threads cost about twenty times the rest of a pull request, so they
+ * are fetched apart and only where the rules read them.
+ */
+const THREADS_QUERY = `query($ids: [ID!]!) { nodes(ids: $ids) { ... on PullRequest { id
   reviewThreads(last: 100) { nodes {
     isResolved isOutdated path line
     first: comments(first: 1) { nodes { author { login } } }
-    last: comments(last: 1) { nodes { author { login } createdAt url } } } }
-`;
+    last: comments(last: 1) { nodes { author { login } createdAt url } } } } } } }`;
 
 const DETAIL_QUERY = `query($ids: [ID!]!, $me: String!) {
   nodes(ids: $ids) { ... on PullRequest { ${PR_FIELDS} } }
@@ -257,6 +304,24 @@ function toReview(node: any): Review | null {
   return { state: node.state, at: node.submittedAt ?? '', commit: node.commit?.oid ?? null };
 }
 
+function threadsOf(node: any): Thread[] {
+  const threads: Thread[] = [];
+  for (const t of node.reviewThreads?.nodes ?? []) {
+    const last = t.last?.nodes?.[0];
+    threads.push({
+      resolved: Boolean(t.isResolved),
+      outdated: Boolean(t.isOutdated),
+      path: t.path ?? '',
+      line: t.line ?? null,
+      starter: login(t.first?.nodes?.[0]?.author),
+      lastAuthor: login(last?.author),
+      lastAt: last?.createdAt ?? '',
+      url: last?.url ?? '',
+    });
+  }
+  return threads;
+}
+
 export function normalize(node: any): PullRequest {
   const commit = node.commits?.nodes?.[0]?.commit;
   const reviews: Record<string, Review> = {};
@@ -275,20 +340,7 @@ export function normalize(node: any): PullRequest {
       requested.push(`team ${who.name}`);
     }
   }
-  const threads: Thread[] = [];
-  for (const t of node.reviewThreads?.nodes ?? []) {
-    const last = t.last?.nodes?.[0];
-    threads.push({
-      resolved: Boolean(t.isResolved),
-      outdated: Boolean(t.isOutdated),
-      path: t.path ?? '',
-      line: t.line ?? null,
-      starter: login(t.first?.nodes?.[0]?.author),
-      lastAuthor: login(last?.author),
-      lastAt: last?.createdAt ?? '',
-      url: last?.url ?? '',
-    });
-  }
+  const threads = threadsOf(node);
   const pending = node.pending?.nodes?.[0];
   return {
     id: node.id,
@@ -446,10 +498,10 @@ async function nodesBatch(gql: Gql, query: string, ids: string[], vars: Record<s
   }
 }
 
-async function nodes(gql: Gql, query: string, ids: string[], vars: Record<string, unknown> = {}): Promise<any[]> {
+async function nodes(gql: Gql, query: string, ids: string[], vars: Record<string, unknown> = {}, size = DETAIL_BATCH): Promise<any[]> {
   const batches: string[][] = [];
-  for (let i = 0; i < ids.length; i += DETAIL_BATCH) {
-    batches.push(ids.slice(i, i + DETAIL_BATCH));
+  for (let i = 0; i < ids.length; i += size) {
+    batches.push(ids.slice(i, i + size));
   }
   const answers: any[] = [];
   let next = 0;
@@ -461,6 +513,56 @@ async function nodes(gql: Gql, query: string, ids: string[], vars: Record<string
   };
   await Promise.all(Array.from({ length: DETAIL_PARALLEL }, worker));
   return answers.filter((n) => n?.id);
+}
+
+/* The rules read threads only on the viewer's own pull requests and on
+ * those the viewer reviewed or holds a pending review on.
+ */
+export function needsThreads(pr: PullRequest, viewer: string): boolean {
+  return pr.author.toLowerCase() === viewer.toLowerCase() || pr.myReview !== null || pr.pendingReview !== null;
+}
+
+function previousPrs(previous: Snapshot | null | undefined): Map<string, PullRequest> {
+  const all = [...(previous?.prs ?? []), ...(previous?.queries ?? []).flatMap((q) => q.prs)];
+  return new Map(all.map((pr) => [pr.id, pr]));
+}
+
+/* Fills the threads of the pull requests that need them. Threads of
+ * the previous snapshot are kept while the pull request has not been
+ * updated since and they are younger than THREADS_MAX_AGE_MS.
+ */
+async function withThreads(gql: Gql, prs: PullRequest[], viewer: string, previous: Snapshot | null | undefined, now: number): Promise<void> {
+  const cached = previousPrs(previous);
+  const stale = new Map<string, PullRequest[]>();
+  for (const pr of prs) {
+    if (!needsThreads(pr, viewer)) {
+      continue;
+    }
+    const old = cached.get(pr.id);
+    if (old?.threadsAt && old.updatedAt === pr.updatedAt && now - Date.parse(old.threadsAt) < THREADS_MAX_AGE_MS) {
+      pr.threads = old.threads;
+      pr.threadsAt = old.threadsAt;
+    } else {
+      stale.set(pr.id, [...(stale.get(pr.id) ?? []), pr]);
+    }
+  }
+  const at = new Date(now).toISOString();
+  for (const node of await nodes(gql, THREADS_QUERY, [...stale.keys()], {}, THREADS_BATCH)) {
+    for (const pr of stale.get(node.id) ?? []) {
+      pr.threads = threadsOf(node);
+      pr.threadsAt = at;
+    }
+  }
+}
+
+async function details(gql: Gql, ids: string[], viewer: string, previous: Snapshot | null | undefined): Promise<Map<string, PullRequest>> {
+  const byId = new Map<string, PullRequest>();
+  for (const node of await nodes(gql, DETAIL_QUERY, ids, { me: viewer })) {
+    const pr = normalize(node);
+    byId.set(pr.id, pr);
+  }
+  await withThreads(gql, [...byId.values()], viewer, previous, Date.now());
+  return byId;
 }
 
 interface CustomSearch {
@@ -512,14 +614,9 @@ function assembleQueries(custom: CustomSearch[], byId: Map<string, PullRequest>,
 }
 
 /* Results of custom filters alone, for a settings change between polls. */
-export async function fetchQueries(gql: Gql, viewer: string, queries: CustomQuery[]): Promise<QueryResult[]> {
+export async function fetchQueries(gql: Gql, viewer: string, queries: CustomQuery[], previous?: Snapshot | null): Promise<QueryResult[]> {
   const custom = await searchCustom(gql, viewer, queries);
-  const ids = [...new Set(custom.flatMap((c) => c.prIds))];
-  const byId = new Map<string, PullRequest>();
-  for (const node of await nodes(gql, DETAIL_QUERY, ids, { me: viewer })) {
-    const pr = normalize(node);
-    byId.set(pr.id, pr);
-  }
+  const byId = await details(gql, [...new Set(custom.flatMap((c) => c.prIds))], viewer, previous);
   return assembleQueries(custom, byId, viewer, await fetchEvents(gql, viewer, custom));
 }
 
@@ -547,10 +644,8 @@ export async function fetchSnapshot(gql: Gql, plan: Plan): Promise<Snapshot> {
   const ids = [...new Set([...rolesById.keys(), ...custom.flatMap((c) => c.prIds)])];
   const prs: PullRequest[] = [];
   const roles: Record<string, Role[]> = {};
-  const byId = new Map<string, PullRequest>();
-  for (const node of await nodes(gql, DETAIL_QUERY, ids, { me: viewer })) {
-    const pr = normalize(node);
-    byId.set(pr.id, pr);
+  const byId = await details(gql, ids, viewer, plan.previous);
+  for (const pr of byId.values()) {
     const set = rolesById.get(pr.id);
     if (set) {
       prs.push(pr);
