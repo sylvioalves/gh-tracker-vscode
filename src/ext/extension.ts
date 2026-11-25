@@ -80,9 +80,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('ghtracker.collapseAll', () => panel.collapseAll()),
     vscode.commands.registerCommand('ghtracker.markAllSeen', () => store.markSeen(store.groups.flatMap((g) => g.rows).map((r) => r.key))),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('ghtracker')) {
-        store.reloadLocal();
+      if (!e.affectsConfiguration('ghtracker')) {
+        return;
+      }
+      store.reloadLocal();
+      if (['repos', 'watchedLabels', 'pollMinutes'].some((k) => e.affectsConfiguration(`ghtracker.${k}`))) {
         void store.refresh(false);
+      } else if (e.affectsConfiguration('ghtracker.queries')) {
+        void store.refreshQueries();
       }
     }),
   );

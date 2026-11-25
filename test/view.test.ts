@@ -104,3 +104,32 @@ test('moving a group inserts it before another or at the end', () => {
   assert.deepEqual(moveGroup(['a', 'b'], 'x', 'b'), ['a', 'x', 'b']);
   assert.deepEqual(moveGroup(['a', 'b'], 'a', 'zzz'), ['b', 'a']);
 });
+
+test('custom groups show and sort by the filter event, empty ones stay', () => {
+  const issue = normalizeIssue(JSON.parse(readFileSync(new URL('./fixtures/issue.raw.json', import.meta.url), 'utf8')));
+  const recent = pr(7, { updatedAt: '2026-11-24T00:00:00Z' });
+  const snap = input([]).snapshot;
+  const groups = buildView(input([], {
+    snapshot: {
+      ...snap,
+      queries: [
+        {
+          name: 'Mentioned', query: 'mentions:@me', focus: 'mentioned', prs: [recent], issues: [issue],
+          eventAt: { [`${recent.repo}#7`]: '2026-03-01T00:00:00Z', [`${issue.repo}#${issue.number}`]: '2026-09-01T00:00:00Z' },
+        },
+        { name: 'Empty', query: 'repo:o/r', focus: 'activity', prs: [], issues: [] },
+      ],
+    },
+  }));
+  assert.deepEqual(groups.map((g) => g.id), ['query:Mentioned', 'query:Empty']);
+  const rows = groups[0]!.rows;
+  assert.deepEqual(rows.map((r) => r.key), [`${issue.repo}#${issue.number}`, `${recent.repo}#7`]);
+  assert.deepEqual(rows[1]!.event, { at: '2026-03-01T00:00:00Z', label: 'mentioned' });
+  assert.equal(rows[1]!.updatedAt, '2026-11-24T00:00:00Z');
+});
+
+test('snapshots without event times keep the last update', () => {
+  const snap = input([]).snapshot;
+  const groups = buildView(input([], { snapshot: { ...snap, queries: [{ name: 'Old', prs: [pr(8)], issues: [] }] } }));
+  assert.equal(groups[0]!.rows[0]!.event, undefined);
+});

@@ -1,3 +1,5 @@
+import { eventAt, FOCUS_EVENTS, queryFocus, type Focus } from './filter-focus.ts';
+
 export type Gql = (query: string, variables?: Record<string, unknown>) => Promise<any>;
 
 export class GithubError extends Error {
@@ -147,6 +149,10 @@ export interface Plan {
 
 export interface QueryResult {
   name: string;
+  query?: string;
+  focus?: Focus;
+  /* Time of the filter's event per item key, see filter-focus.ts. */
+  eventAt?: Record<string, string>;
   prs: PullRequest[];
   issues: Issue[];
 }
@@ -215,6 +221,17 @@ const ITEM_SEARCH_QUERY = `query($q: String!, $after: String) {
 }`;
 
 const VIEWER_QUERY = 'query { viewer { login } rateLimit { remaining } }';
+
+/* Timeline window per item for a focus that has an event type. */
+function eventQuery(focus: Focus): string | undefined {
+  const spec = FOCUS_EVENTS[focus];
+  if (!spec) {
+    return undefined;
+  }
+  const fields = `id createdAt timelineItems(last: 50, itemTypes: [${spec.type}]) {
+    nodes { ... on ${spec.event} { createdAt ${spec.who} { ... on User { login } } } } }`;
+  return `query($ids: [ID!]!) { nodes(ids: $ids) { ... on Issue { ${fields} } ... on PullRequest { ${fields} } } }`;
+}
 
 function login(actor: { login?: string } | null | undefined): string {
   return actor?.login ?? 'ghost';
@@ -414,19 +431,96 @@ async function resolveRefs(gql: Gql, refs: PrRef[]): Promise<string[]> {
 }
 
 /* GitHub times out on large documents: a batch that fails with a
- * server error is split in halves until single pull requests remain.
+ * server error is split in halves until single items remain.
  */
-async function detail(gql: Gql, ids: string[], me: string): Promise<any[]> {
+async function nodesBatch(gql: Gql, query: string, ids: string[], vars: Record<string, unknown>): Promise<any[]> {
   try {
-    const data = await gql(DETAIL_QUERY, { ids, me });
+    const data = await gql(query, { ...vars, ids });
     return data.nodes;
   } catch (err) {
     if (!(err instanceof GithubError) || err.status < 500 || ids.length === 1) {
       throw err;
     }
     const half = Math.ceil(ids.length / 2);
-    return [...await detail(gql, ids.slice(0, half), me), ...await detail(gql, ids.slice(half), me)];
+    return [...await nodesBatch(gql, query, ids.slice(0, half), vars), ...await nodesBatch(gql, query, ids.slice(half), vars)];
   }
+}
+
+async function nodes(gql: Gql, query: string, ids: string[], vars: Record<string, unknown> = {}): Promise<any[]> {
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += DETAIL_BATCH) {
+    batches.push(ids.slice(i, i + DETAIL_BATCH));
+  }
+  const answers: any[] = [];
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < batches.length) {
+      const i = next++;
+      answers.push(...await nodesBatch(gql, query, batches[i]!, vars));
+    }
+  };
+  await Promise.all(Array.from({ length: DETAIL_PARALLEL }, worker));
+  return answers.filter((n) => n?.id);
+}
+
+interface CustomSearch {
+  name: string;
+  query: string;
+  focus: Focus;
+  prIds: string[];
+  issues: Issue[];
+}
+
+async function searchCustom(gql: Gql, viewer: string, queries: CustomQuery[]): Promise<CustomSearch[]> {
+  const out: CustomSearch[] = [];
+  for (const q of queries) {
+    out.push({ name: q.name, query: q.query, focus: queryFocus(q.query, viewer), ...await searchItems(gql, q.query) });
+  }
+  return out;
+}
+
+/* Event times per node id for the items of every filter whose focus
+ * needs a fetch. Items of several filters are fetched once per focus.
+ */
+async function fetchEvents(gql: Gql, viewer: string, custom: CustomSearch[]): Promise<Map<Focus, Map<string, string>>> {
+  const out = new Map<Focus, Map<string, string>>();
+  for (const focus of Object.keys(FOCUS_EVENTS) as Focus[]) {
+    const ids = [...new Set(custom.filter((c) => c.focus === focus).flatMap((c) => [...c.prIds, ...c.issues.map((i) => i.id)]))];
+    if (ids.length === 0) {
+      continue;
+    }
+    const times = new Map<string, string>();
+    for (const node of await nodes(gql, eventQuery(focus)!, ids)) {
+      times.set(node.id, eventAt(focus, node, viewer));
+    }
+    out.set(focus, times);
+  }
+  return out;
+}
+
+function assembleQueries(custom: CustomSearch[], byId: Map<string, PullRequest>, viewer: string,
+  events: Map<Focus, Map<string, string>>): QueryResult[] {
+  return custom.map((c) => {
+    const prs = c.prIds.map((id) => byId.get(id)).filter((pr): pr is PullRequest => pr !== undefined);
+    const fetched = events.get(c.focus);
+    const at: Record<string, string> = {};
+    for (const item of [...prs, ...c.issues]) {
+      at[prKey(item.repo, item.number)] = fetched?.get(item.id) ?? eventAt(c.focus, item, viewer);
+    }
+    return { name: c.name, query: c.query, focus: c.focus, eventAt: at, prs, issues: c.issues };
+  });
+}
+
+/* Results of custom filters alone, for a settings change between polls. */
+export async function fetchQueries(gql: Gql, viewer: string, queries: CustomQuery[]): Promise<QueryResult[]> {
+  const custom = await searchCustom(gql, viewer, queries);
+  const ids = [...new Set(custom.flatMap((c) => c.prIds))];
+  const byId = new Map<string, PullRequest>();
+  for (const node of await nodes(gql, DETAIL_QUERY, ids, { me: viewer })) {
+    const pr = normalize(node);
+    byId.set(pr.id, pr);
+  }
+  return assembleQueries(custom, byId, viewer, await fetchEvents(gql, viewer, custom));
 }
 
 export async function fetchSnapshot(gql: Gql, plan: Plan): Promise<Snapshot> {
@@ -449,31 +543,12 @@ export async function fetchSnapshot(gql: Gql, plan: Plan): Promise<Snapshot> {
   for (const id of await resolveRefs(gql, plan.extra)) {
     add(id, 'extra');
   }
-  const custom: { name: string; prIds: string[]; issues: Issue[] }[] = [];
-  for (const q of plan.queries ?? []) {
-    custom.push({ name: q.name, ...await searchItems(gql, q.query) });
-  }
+  const custom = await searchCustom(gql, viewer, plan.queries ?? []);
   const ids = [...new Set([...rolesById.keys(), ...custom.flatMap((c) => c.prIds)])];
-  const batches: string[][] = [];
-  for (let i = 0; i < ids.length; i += DETAIL_BATCH) {
-    batches.push(ids.slice(i, i + DETAIL_BATCH));
-  }
-  const answers: any[] = [];
-  let next = 0;
-  const worker = async (): Promise<void> => {
-    while (next < batches.length) {
-      const i = next++;
-      answers.push(...await detail(gql, batches[i]!, viewer));
-    }
-  };
-  await Promise.all(Array.from({ length: DETAIL_PARALLEL }, worker));
   const prs: PullRequest[] = [];
   const roles: Record<string, Role[]> = {};
   const byId = new Map<string, PullRequest>();
-  for (const node of answers) {
-    if (!node?.id) {
-      continue;
-    }
+  for (const node of await nodes(gql, DETAIL_QUERY, ids, { me: viewer })) {
     const pr = normalize(node);
     byId.set(pr.id, pr);
     const set = rolesById.get(pr.id);
@@ -482,11 +557,7 @@ export async function fetchSnapshot(gql: Gql, plan: Plan): Promise<Snapshot> {
       roles[prKey(pr.repo, pr.number)] = [...set];
     }
   }
-  const queries = custom.map((c) => ({
-    name: c.name,
-    prs: c.prIds.map((id) => byId.get(id)).filter((pr): pr is PullRequest => pr !== undefined),
-    issues: c.issues,
-  }));
+  const queries = assembleQueries(custom, byId, viewer, await fetchEvents(gql, viewer, custom));
   return {
     viewer,
     fetchedAt: new Date().toISOString(),

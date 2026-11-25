@@ -1,7 +1,7 @@
 import type { ReasonKind } from './classify.ts';
 import { authorTrust, type AuthorTrust } from './github.ts';
 import type { Session } from './sessions.ts';
-import type { Group, IssueRow, Row, ViewRow } from './view.ts';
+import { rowTime, type Group, type IssueRow, type Row, type ViewRow } from './view.ts';
 
 export interface PanelSession {
   id: string;
@@ -21,6 +21,9 @@ export interface PanelRow {
   authorTrust: AuthorTrust;
   base: string;
   updatedAt: string;
+  /* Time shown on the card, with the event it marks when not the last update. */
+  when: string;
+  whenLabel: string;
   unseen: boolean;
   myTurn: boolean;
   pinned: boolean;
@@ -90,6 +93,9 @@ function tooltip(row: Row): string {
   for (const r of row.reasons) {
     lines.push(`- ${r.text}`);
   }
+  if (row.event) {
+    lines.push(`${row.event.label} at ${row.event.at}, updated at ${pr.updatedAt}`);
+  }
   return lines.join('\n');
 }
 
@@ -107,6 +113,9 @@ function issueTooltip(row: IssueRow): string {
   }
   if (issue.lastComment) {
     lines.push(`last comment by ${issue.lastComment.author} at ${issue.lastComment.at}`);
+  }
+  if (row.event) {
+    lines.push(`${row.event.label} at ${row.event.at}, updated at ${issue.updatedAt}`);
   }
   return lines.join('\n');
 }
@@ -134,6 +143,8 @@ function issuePanelRow(row: IssueRow): PanelRow {
     authorTrust: authorTrust(issue.authorAssociation),
     base: '',
     updatedAt: issue.updatedAt,
+    when: rowTime(row),
+    whenLabel: row.event?.label ?? '',
     unseen: row.unseen,
     myTurn: false,
     pinned: false,
@@ -176,6 +187,8 @@ export function panelRow(row: ViewRow, opts: PanelOptions): PanelRow {
     authorTrust: authorTrust(pr.authorAssociation),
     base: pr.base,
     updatedAt: pr.updatedAt,
+    when: rowTime(row),
+    whenLabel: row.event?.label ?? '',
     unseen: row.unseen,
     myTurn: row.myTurn,
     pinned,

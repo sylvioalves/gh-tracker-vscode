@@ -210,7 +210,7 @@ function card(r: PanelRow): HTMLElement {
   if (r.unseen) {
     top.append(el('span', 'dot', '●'));
   }
-  top.append(el('span', 'when', ago(r.updatedAt)));
+  top.append(el('span', 'when', r.whenLabel ? `${r.whenLabel} ${ago(r.when)}` : ago(r.when)));
   body.append(top, el('div', 'title', r.title));
   const acts = el('div', 'acts');
   if (r.kind === 'issue') {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { authorTrust, customQueries, fetchSnapshot, GithubError, normalize, normalizeIssue, repoLabels, searches, searchPreview, type Gql } from '../src/core/github.ts';
+import { authorTrust, customQueries, fetchQueries, fetchSnapshot, GithubError, normalize, normalizeIssue, repoLabels, searches, searchPreview, type Gql } from '../src/core/github.ts';
 
 const raw = JSON.parse(readFileSync(new URL('./fixtures/pr-114959.raw.json', import.meta.url), 'utf8'));
 const rawIssue = JSON.parse(readFileSync(new URL('./fixtures/issue.raw.json', import.meta.url), 'utf8'));
@@ -238,4 +238,41 @@ test('searchPreview keeps the count and the issue or pull request nodes', async 
   assert.deepEqual(await searchPreview(gql, 'repo:o/r is:open'), {
     count: 42, items: [{ number: 1, title: 'a', url: 'u1' }, { number: 2, title: 'b', url: 'u2' }],
   });
+});
+
+test('fetchQueries keeps the time of the filter event per item', async () => {
+  const asked: string[] = [];
+  const gql: Gql = async (query, vars = {}) => {
+    if (query.includes('MENTIONED_EVENT')) {
+      asked.push('events');
+      return { nodes: (vars.ids as string[]).map((id) => ({
+        id, createdAt: '2026-01-01T00:00:00Z',
+        timelineItems: { nodes: id === 'P' ? [{ createdAt: '2026-06-01T00:00:00Z', actor: { login: 'me' } }] : [] },
+      })) };
+    }
+    if (query.includes('... on Issue')) {
+      asked.push(vars.q as string);
+      return { search: { pageInfo: { hasNextPage: false }, nodes: [{ ...rawIssue, id: 'I1', number: 1 }, { __typename: 'PullRequest', id: 'P' }] } };
+    }
+    asked.push('detail');
+    return { nodes: (vars.ids as string[]).map((id) => ({ ...raw, id, number: 5 })) };
+  };
+  const [mentioned] = await fetchQueries(gql, 'me', [{ name: 'Mentioned', query: 'mentions:@me' }]);
+  assert.deepEqual(asked, ['mentions:@me', 'detail', 'events']);
+  assert.equal(mentioned!.focus, 'mentioned');
+  assert.equal(mentioned!.query, 'mentions:@me');
+  assert.deepEqual(mentioned!.eventAt, {
+    'zephyrproject-rtos/zephyr#5': '2026-06-01T00:00:00Z',
+    'zephyrproject-rtos/zephyr#1': '2026-01-01T00:00:00Z',
+  });
+});
+
+test('a filter on the last update needs no event fetch', async () => {
+  const gql: Gql = async (query) => {
+    assert.ok(!query.includes('timelineItems(last: 50'), 'no event query');
+    return { search: { pageInfo: { hasNextPage: false }, nodes: [{ ...rawIssue, id: 'I1', number: 1 }] } };
+  };
+  const [plain] = await fetchQueries(gql, 'me', [{ name: 'Plain', query: 'repo:o/r' }]);
+  assert.equal(plain!.focus, 'activity');
+  assert.deepEqual(plain!.eventAt, { 'zephyrproject-rtos/zephyr#1': rawIssue.updatedAt });
 });

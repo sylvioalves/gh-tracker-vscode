@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import * as vscode from 'vscode';
 import type { Ack } from '../core/classify.ts';
-import { customQueries, fetchSnapshot, GithubError, httpGql, type CustomQuery, type PrRef, type Snapshot } from '../core/github.ts';
+import { customQueries, fetchQueries, fetchSnapshot, GithubError, httpGql, type CustomQuery, type PrRef, type QueryResult, type Snapshot } from '../core/github.ts';
 import { loadLedgers, type Ledger } from '../core/ledger.ts';
 import { loadSessionIndex, type Session } from '../core/sessions.ts';
 import { buildView, orderGroups, type Group, type Row, type ViewRow } from '../core/view.ts';
@@ -57,6 +57,8 @@ export class Store implements vscode.Disposable {
   private timer: NodeJS.Timeout | undefined;
   private failures = 0;
   private busy = false;
+  private again = false;
+  private queriesStale = false;
   private cache: Group[] = [];
   private readonly context: vscode.ExtensionContext;
   status: Status = { kind: 'idle' };
@@ -149,8 +151,10 @@ export class Store implements vscode.Disposable {
     if (!this.snapshot) {
       this.cache = [];
     } else {
+      const names = settings().queries.map((q) => q.name);
+      const queries = (this.snapshot.queries ?? []).filter((q) => names.includes(q.name));
       this.cache = orderGroups(buildView({
-        snapshot: this.snapshot,
+        snapshot: { ...this.snapshot, queries },
         ledgers: this.ledgers,
         sessions: this.sessions,
         acks: this.acks,
@@ -168,6 +172,7 @@ export class Store implements vscode.Disposable {
 
   async refresh(interactive: boolean): Promise<void> {
     if (this.busy) {
+      this.again = true;
       return;
     }
     const s = settings();
@@ -202,6 +207,69 @@ export class Store implements vscode.Disposable {
         this.schedule(this.failures > 0 ? retry : s.pollMs);
       }
       this.changed.fire();
+      this.next();
+    }
+  }
+
+  /* Runs the work requested while a fetch was in flight. */
+  private next(): void {
+    if (this.again) {
+      this.again = false;
+      this.queriesStale = false;
+      void this.refresh(false);
+    } else if (this.queriesStale) {
+      void this.refreshQueries();
+    }
+  }
+
+  /* Fetches only the filters that are new or whose query changed, so a
+   * saved filter shows up without a full poll.
+   */
+  async refreshQueries(): Promise<void> {
+    if (this.busy) {
+      this.queriesStale = true;
+      return;
+    }
+    this.queriesStale = false;
+    const snapshot = this.snapshot;
+    if (!snapshot) {
+      await this.refresh(false);
+      return;
+    }
+    const wanted = settings().queries;
+    const have = new Map((snapshot.queries ?? []).map((q) => [q.name, q]));
+    const changed = wanted.filter((q) => have.get(q.name)?.query !== q.query);
+    if (changed.length === 0) {
+      this.recompute();
+      return;
+    }
+    this.busy = true;
+    this.status = { kind: 'loading' };
+    this.changed.fire();
+    try {
+      const token = await getToken(false);
+      if (!token) {
+        this.status = { kind: 'signedOut' };
+        return;
+      }
+      const fetched = new Map((await fetchQueries(httpGql(token), snapshot.viewer, changed)).map((q) => [q.name, q]));
+      const current = this.snapshot ?? snapshot;
+      const old = new Map((current.queries ?? []).map((q) => [q.name, q]));
+      this.snapshot = {
+        ...current,
+        queries: wanted.map((q) => fetched.get(q.name) ?? old.get(q.name)).filter((q): q is QueryResult => q !== undefined),
+      };
+      await this.persist();
+      this.status = { kind: 'idle' };
+      this.recompute();
+    } catch (err) {
+      const message = err instanceof GithubError && err.status === 401
+        ? 'GitHub rejected the token' : (err as Error).message;
+      this.status = { kind: 'error', message };
+    } finally {
+      this.busy = false;
+      this.changed.fire();
+      this.next();
     }
   }
 

@@ -1,7 +1,16 @@
 import { classify, type Ack, type Bucket, type Classified } from './classify.ts';
-import { prKey, type Issue, type PullRequest, type Snapshot } from './github.ts';
+import { FOCUS_TEXT } from './filter-focus.ts';
+import { prKey, type Issue, type PullRequest, type QueryResult, type Snapshot } from './github.ts';
 import type { Ledger } from './ledger.ts';
 import type { Session } from './sessions.ts';
+
+/* The event a custom filter row is about, shown and sorted on instead
+ * of the last update.
+ */
+export interface RowEvent {
+  at: string;
+  label: string;
+}
 
 export interface Row extends Classified {
   kind: 'pr';
@@ -9,6 +18,7 @@ export interface Row extends Classified {
   sessions: Session[];
   updatedAt: string;
   unseen: boolean;
+  event?: RowEvent;
 }
 
 export interface IssueRow {
@@ -20,6 +30,7 @@ export interface IssueRow {
   newReply: boolean;
   updatedAt: string;
   unseen: boolean;
+  event?: RowEvent;
 }
 
 export type ViewRow = Row | IssueRow;
@@ -127,8 +138,22 @@ export function rows(input: ViewInput): Row[] {
   return input.snapshot.prs.map((pr) => prRow(pr, input));
 }
 
+export function rowTime(r: ViewRow): string {
+  return r.event?.at ?? r.updatedAt;
+}
+
 function newestFirst(a: ViewRow, b: ViewRow): number {
-  return a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0;
+  const x = rowTime(a);
+  const y = rowTime(b);
+  return x < y ? 1 : x > y ? -1 : 0;
+}
+
+function withEvent(row: ViewRow, q: QueryResult): ViewRow {
+  const at = q.eventAt?.[row.key];
+  if (!q.focus || q.focus === 'activity' || !at) {
+    return row;
+  }
+  return { ...row, event: { at, label: FOCUS_TEXT[q.focus] } };
 }
 
 export function buildView(input: ViewInput): Group[] {
@@ -141,9 +166,10 @@ export function buildView(input: ViewInput): Group[] {
     id: `query:${q.name}`,
     label: q.name,
     myTurn: false,
-    rows: [...q.prs.map((pr) => prRow(pr, input)), ...q.issues.map((i) => issueRow(i, input))].sort(newestFirst),
+    rows: [...q.prs.map((pr) => prRow(pr, input)), ...q.issues.map((i) => issueRow(i, input))]
+      .map((r) => withEvent(r, q)).sort(newestFirst),
   }));
-  return [...builtin, ...custom].filter((g) => g.rows.length > 0);
+  return [...builtin.filter((g) => g.rows.length > 0), ...custom];
 }
 
 /* Groups in the order the user dragged them into. Groups the saved
