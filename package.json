@@ -2,7 +2,7 @@
   "name": "ghtracker",
   "displayName": "GH Tracker",
   "description": "Pull requests waiting on you, with review ledgers and Claude sessions",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "sylvioalves",
   "license": "MIT",
   "repository": {
