@@ -433,7 +433,7 @@
       "properties": {
         "ghtracker.repos": {
           "type": "array",
-          "scope": "application",
+          "scope": "machine",
           "items": {
             "type": "string"
           },
@@ -445,7 +445,7 @@
         },
         "ghtracker.watchedLabels": {
           "type": "array",
-          "scope": "application",
+          "scope": "machine",
           "items": {
             "type": "string"
           },
@@ -456,7 +456,7 @@
         },
         "ghtracker.queries": {
           "type": "array",
-          "scope": "application",
+          "scope": "machine",
           "items": {
             "type": "object",
             "properties": {
@@ -487,32 +487,32 @@
         },
         "ghtracker.pollMinutes": {
           "type": "number",
-          "scope": "application",
+          "scope": "machine",
           "default": 10,
           "minimum": 2,
           "description": "Minutes between GitHub polls."
         },
         "ghtracker.ledgerDir": {
           "type": "string",
-          "scope": "application",
+          "scope": "machine",
           "default": "~/.claude/reviews",
           "description": "Directory holding the review ledgers (<repo>-<N>.md)."
         },
         "ghtracker.sessionIndex": {
           "type": "string",
-          "scope": "application",
+          "scope": "machine",
           "default": "~/.claude/reviews/sessions.jsonl",
           "description": "Session index written by the pr-session-index hook."
         },
         "ghtracker.notifications": {
           "type": "boolean",
-          "scope": "application",
+          "scope": "machine",
           "default": true,
           "description": "Show a notification when a pull request comes to your turn."
         },
         "ghtracker.reviewLaunch": {
           "type": "string",
-          "scope": "application",
+          "scope": "machine",
           "enum": [
             "tab",
             "terminal"
@@ -526,13 +526,13 @@
         },
         "ghtracker.reviewSettings": {
           "type": "string",
-          "scope": "application",
+          "scope": "machine",
           "default": "~/.claude/profiles/review.json",
           "markdownDescription": "Claude Code settings file passed as `--settings` when a review starts in a terminal: a sandboxed, read-only profile for sessions that read untrusted pull request text. Empty disables it."
         },
         "ghtracker.openPrIn": {
           "type": "string",
-          "scope": "application",
+          "scope": "machine",
           "enum": [
             "integratedBrowser",
             "githubExtension",
