@@ -99,6 +99,30 @@ test('own pull request with nothing to do waits on reviewers', () => {
   assert.equal(classify(pr({ author: ME }), ctx({ ack: { head: HEAD, replyAt: '9999' } })).bucket, 'waitingReview');
 });
 
+test('a kept own pull request stays in My PRs, also after Mark Checked', () => {
+  const idle = pr({ author: ME, ci: 'SUCCESS', mergeable: 'MERGEABLE', reviews: {}, threads: [] });
+  const kept = classify(idle, ctx({ kept: true }));
+  assert.equal(kept.bucket, 'mine');
+  assert.deepEqual(kept.reasons.map((r) => r.kind), ['kept']);
+  const checked = classify(pr({ author: ME }), ctx({ kept: true, ack: { head: HEAD, replyAt: '9999' } }));
+  assert.equal(checked.bucket, 'mine');
+  assert.equal(checked.checked, true);
+  assert.deepEqual(checked.reasons.map((r) => r.kind), ['kept']);
+  assert.deepEqual(classify(pr({ author: ME }), ctx({ kept: true })).reasons.map((r) => r.kind), ['ci', 'conflicts', 'replies']);
+});
+
+test('keeping has no effect on others pull requests', () => {
+  const other = pr({ myReview: null, threads: [], assignees: [], draft: false });
+  assert.equal(classify(other, ctx({ kept: true })).bucket, 'other');
+  assert.equal(classify(other, ctx({ kept: true })).own, false);
+});
+
+test('checked follows the head the mark was made on', () => {
+  assert.equal(classify(pr(), ctx({ ack: { head: HEAD, replyAt: '' } })).checked, true);
+  assert.equal(classify(pr(), ctx({ ack: { head: OLD, replyAt: '' } })).checked, false);
+  assert.equal(classify(pr(), ctx()).checked, false);
+});
+
 test('first look: assignment, labelled request, pin, drafts left out', () => {
   const fresh = pr({ myReview: null, threads: [], assignees: [] });
   assert.equal(classify(pr({ myReview: null, assignees: ['SylvioAlves'] }), ctx()).reasons[0]!.text, 'assigned to you');

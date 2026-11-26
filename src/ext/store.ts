@@ -19,6 +19,7 @@ const LEASE_TICK_MS = 30_000;
 const LEASE_STALE_MS = 90_000;
 const FIRE_MS = 200;
 const ACKS = 'acks';
+const KEPT = 'kept';
 const SEEN = 'seen';
 const PINS = 'pins';
 const GROUP_ORDER = 'groupOrder';
@@ -294,6 +295,7 @@ export class Store implements vscode.Disposable {
         ledgers: this.ledgers,
         sessions: this.sessions,
         acks: this.acks,
+        kept: new Set(this.kept),
         seen: this.seen,
         labels: settings().labels,
       }), this.groupOrder);
@@ -488,6 +490,31 @@ export class Store implements vscode.Disposable {
       }
     }
     await this.context.globalState.update(ACKS, acks);
+    this.recompute();
+  }
+
+  async unack(key: string): Promise<void> {
+    const acks = { ...this.acks };
+    delete acks[key];
+    await this.context.globalState.update(ACKS, acks);
+    this.recompute();
+  }
+
+  get kept(): string[] {
+    return this.context.globalState.get<string[]>(KEPT, []);
+  }
+
+  isKept(key: string): boolean {
+    return this.kept.includes(key);
+  }
+
+  /* Keeps an own pull request in My PRs while it has no other reason
+   * to be there.
+   */
+  async setKept(key: string, on: boolean): Promise<void> {
+    const live = this.liveKeys();
+    const kept = this.kept.filter((k) => k !== key && live.has(k));
+    await this.context.globalState.update(KEPT, on ? [...kept, key] : kept);
     this.recompute();
   }
 

@@ -258,7 +258,10 @@ function card(r: PanelRow): HTMLElement {
   } else {
     acts.append(button('sparkle', 'Review with Claude (/pr-rev)', () => run('ghtracker.review', r.key)));
   }
-  if (r.myTurn) {
+  if (r.checked) {
+    acts.append(button('discard', 'Uncheck', () => run('ghtracker.uncheck', r.key)));
+  }
+  if (r.myTurn && r.reasons.some((x) => x.kind !== 'kept')) {
     acts.append(button('check', 'Mark Checked', () => run('ghtracker.markChecked', r.key)));
   }
   acts.append(button('link-external', 'Open on GitHub', () => run('ghtracker.openOnGitHub', r.key)));

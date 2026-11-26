@@ -48,6 +48,7 @@ export interface ViewInput {
   ledgers: Map<string, Ledger>;
   sessions: Map<string, Session[]>;
   acks: Record<string, Ack>;
+  kept?: ReadonlySet<string>;
   seen: Record<string, string>;
   labels: string[];
 }
@@ -104,6 +105,7 @@ function prRow(pr: PullRequest, input: ViewInput): Row {
     labels: input.labels,
     ledger,
     ack: input.acks[key],
+    kept: input.kept?.has(key) ?? false,
   });
   const read = readMark(input, key);
   const own = lastOwnAction(c, snapshot.viewer);

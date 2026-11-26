@@ -28,6 +28,8 @@ export interface PanelRow {
   unseen: boolean;
   myTurn: boolean;
   pinned: boolean;
+  checked: boolean;
+  kept: boolean;
   icon: string;
   reasons: { kind: ReasonKind | 'comments'; short: string; text: string }[];
   ledger: { active: number; head: string; reviewedAt: string | null; counts: string; mismatch: boolean } | null;
@@ -48,6 +50,7 @@ export interface PanelGroup {
 export interface PanelOptions {
   expired: (s: Session) => boolean;
   pinned: (key: string) => boolean;
+  kept?: (key: string) => boolean;
   progress?: Record<string, number> | null;
 }
 
@@ -61,6 +64,7 @@ const ICONS: Record<ReasonKind, string> = {
   assigned: 'person',
   requested: 'eye',
   pinned: 'pinned',
+  kept: 'pinned',
 };
 
 const TRUST_TEXT: Record<AuthorTrust, string> = {
@@ -152,6 +156,8 @@ function issuePanelRow(row: IssueRow): PanelRow {
     unseen: row.unseen,
     myTurn: false,
     pinned: false,
+    checked: false,
+    kept: false,
     icon: issue.state === 'CLOSED' ? 'issue-closed' : 'issues',
     reasons,
     ledger: null,
@@ -168,6 +174,7 @@ export function panelRow(row: ViewRow, opts: PanelOptions): PanelRow {
   const { pr } = row;
   const sessions = row.sessions.map((s) => ({ id: s.id, skills: s.skills, last: s.last, expired: opts.expired(s) }));
   const pinned = opts.pinned(row.key);
+  const kept = opts.kept?.(row.key) ?? false;
   const first = row.reasons[0]?.kind;
   const ledger = row.ledger
     ? {
@@ -179,7 +186,8 @@ export function panelRow(row: ViewRow, opts: PanelOptions): PanelRow {
     }
     : null;
   const menu = ['pr', row.myTurn ? 'myturn' : '', ledger ? 'ledger' : '',
-    sessions.some((s) => !s.expired) ? 'session' : '', pinned ? 'pinned' : ''].filter(Boolean).join(' ');
+    sessions.some((s) => !s.expired) ? 'session' : '', pinned ? 'pinned' : '', row.checked ? 'checked' : '',
+    row.own ? (kept ? 'kept' : 'own') : ''].filter(Boolean).join(' ');
   return {
     kind: 'pr',
     key: row.key,
@@ -196,6 +204,8 @@ export function panelRow(row: ViewRow, opts: PanelOptions): PanelRow {
     unseen: row.unseen,
     myTurn: row.myTurn,
     pinned,
+    checked: row.checked,
+    kept,
     icon: first ? ICONS[first] : (row.bucket === 'waitingAuthor' ? 'clock' : 'git-pull-request'),
     reasons: row.reasons.map((r) => ({ kind: r.kind, short: r.short, text: r.text })),
     ledger,

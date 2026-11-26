@@ -84,7 +84,7 @@ export class PrPanel implements vscode.WebviewViewProvider, vscode.Disposable {
     if (!view.visible) {
       return;
     }
-    const groups = panelData(store.groups, { expired: sessionExpired, pinned: (k) => store.isPinned(k), progress: store.progress });
+    const groups = panelData(store.groups, { expired: sessionExpired, pinned: (k) => store.isPinned(k), kept: (k) => store.isKept(k), progress: store.progress });
     const status = st.kind === 'error' ? { kind: 'error', message: st.message }
       : st.kind === 'limited' ? { kind: 'limited', message: `GitHub rate limit reached. Next refresh at ${clock(st.until)}.` }
       : st.kind === 'loading' ? { kind: 'loading', message: `Loading pull requests... ${overall ?? 0}%` }

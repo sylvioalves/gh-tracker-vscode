@@ -115,6 +115,23 @@
         "icon": "$(check)"
       },
       {
+        "command": "ghtracker.uncheck",
+        "title": "Uncheck",
+        "category": "GH Tracker",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "ghtracker.keep",
+        "title": "Keep in My PRs",
+        "category": "GH Tracker",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "ghtracker.unkeep",
+        "title": "Stop Keeping in My PRs",
+        "category": "GH Tracker"
+      },
+      {
         "command": "ghtracker.unpin",
         "title": "Stop Tracking",
         "category": "GH Tracker"
@@ -308,6 +325,18 @@
         {
           "command": "ghtracker.removeFilter",
           "when": "false"
+        },
+        {
+          "command": "ghtracker.uncheck",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.keep",
+          "when": "false"
+        },
+        {
+          "command": "ghtracker.unkeep",
+          "when": "false"
         }
       ],
       "webview/context": [
@@ -375,6 +404,21 @@
           "command": "ghtracker.markChecked",
           "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bmyturn\\b/",
           "group": "3_state@1"
+        },
+        {
+          "command": "ghtracker.uncheck",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bchecked\\b/",
+          "group": "3_state@1"
+        },
+        {
+          "command": "ghtracker.keep",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bown\\b/",
+          "group": "3_state@3"
+        },
+        {
+          "command": "ghtracker.unkeep",
+          "when": "webviewId == 'ghtracker.prs' && webviewSection == 'pr' && ghtrackerItem =~ /\\bkept\\b/",
+          "group": "3_state@3"
         },
         {
           "command": "ghtracker.unpin",

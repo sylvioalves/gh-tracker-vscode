@@ -167,6 +167,9 @@ export function registerCommands(context: vscode.ExtensionContext, store: Store)
     })),
     vscode.commands.registerCommand('ghtracker.markRead', withItem(() => undefined)),
     vscode.commands.registerCommand('ghtracker.markChecked', withRow((row) => store.ack(row))),
+    vscode.commands.registerCommand('ghtracker.uncheck', withRow((row) => store.unack(row.key))),
+    vscode.commands.registerCommand('ghtracker.keep', withRow((row) => store.setKept(row.key, true))),
+    vscode.commands.registerCommand('ghtracker.unkeep', withRow((row) => store.setKept(row.key, false))),
     vscode.commands.registerCommand('ghtracker.unpin', withRow((row) => store.unpin(row.key))),
     vscode.commands.registerCommand('ghtracker.openLedger', withRow((row) => {
       if (row.ledger) {

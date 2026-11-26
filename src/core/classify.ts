@@ -2,7 +2,7 @@ import { prKey, type PullRequest, type Role } from './github.ts';
 
 export type Bucket = 'drafts' | 'recheck' | 'review' | 'mine' | 'waitingAuthor' | 'waitingReview' | 'closed' | 'other';
 
-export type ReasonKind = 'draftReview' | 'push' | 'replies' | 'ci' | 'conflicts' | 'changes' | 'assigned' | 'requested' | 'pinned';
+export type ReasonKind = 'draftReview' | 'push' | 'replies' | 'ci' | 'conflicts' | 'changes' | 'assigned' | 'requested' | 'pinned' | 'kept';
 
 export interface Reason {
   kind: ReasonKind;
@@ -28,6 +28,7 @@ export interface Context {
   labels: string[];
   ledger?: LedgerHead | undefined;
   ack?: Ack | undefined;
+  kept?: boolean;
 }
 
 export interface Classified {
@@ -37,6 +38,8 @@ export interface Classified {
   myTurn: boolean;
   reasons: Reason[];
   priority: number;
+  own: boolean;
+  checked: boolean;
 }
 
 const SHA_MIN = 7;
@@ -150,6 +153,8 @@ function firstLookReasons(pr: PullRequest, ctx: Context): Reason[] {
 
 export function classify(pr: PullRequest, ctx: Context): Classified {
   const key = prKey(pr.repo, pr.number);
+  const own = same(pr.author, ctx.viewer);
+  const acked = sameCommit(ctx.ack?.head, pr.head);
   const result = (bucket: Bucket, reasons: Reason[]): Classified => ({
     key,
     pr,
@@ -157,6 +162,8 @@ export function classify(pr: PullRequest, ctx: Context): Classified {
     myTurn: bucket === 'drafts' || bucket === 'recheck' || bucket === 'review' || bucket === 'mine',
     reasons,
     priority: priorityOf(bucket, pr),
+    own,
+    checked: acked,
   });
   if (pr.state !== 'OPEN') {
     return result('closed', []);
@@ -164,9 +171,11 @@ export function classify(pr: PullRequest, ctx: Context): Classified {
   if (pr.pendingReview) {
     return result('drafts', [{ kind: 'draftReview', text: 'your review is pending, not submitted', short: 'draft pending' }]);
   }
-  const acked = sameCommit(ctx.ack?.head, pr.head);
-  if (same(pr.author, ctx.viewer)) {
+  if (own) {
     const reasons = ownReasons(pr, ctx, acked);
+    if (ctx.kept && reasons.length === 0) {
+      reasons.push({ kind: 'kept', text: 'kept in My PRs', short: 'kept' });
+    }
     return result(reasons.length > 0 ? 'mine' : 'waitingReview', reasons);
   }
   if (pr.myReview || ctx.ledger?.head) {
