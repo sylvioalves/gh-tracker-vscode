@@ -14,6 +14,7 @@ interface DataMessage {
 interface State {
   open: string[];
   closed: string[];
+  query?: string;
 }
 
 declare function acquireVsCodeApi(): {
@@ -26,14 +27,40 @@ const QUERY_GROUP = 'query:';
 
 const vscode = acquireVsCodeApi();
 const root = document.getElementById('root')!;
+const searchBar = document.getElementById('search')!;
+const queryInput = document.getElementById('query') as HTMLInputElement;
 const saved = vscode.getState();
 const open = new Set<string>(saved?.open ?? []);
 const closed = new Set<string>(saved?.closed ?? []);
 let data: DataMessage | null = null;
 let selected: string | null = null;
+let query = saved?.query ?? '';
 
 function save(): void {
-  vscode.setState({ open: [...open], closed: [...closed] });
+  vscode.setState({ open: [...open], closed: [...closed], query });
+}
+
+function terms(): string[] {
+  return query.toLowerCase().split(/\s+/).filter((t) => t !== '');
+}
+
+function matches(r: PanelRow, words: string[]): boolean {
+  const text = `${r.repo} #${r.number} ${r.author} ${r.title} ${r.tooltip}`.toLowerCase();
+  return words.every((w) => text.includes(w));
+}
+
+function showSearch(show: boolean): void {
+  searchBar.hidden = !show;
+  document.body.classList.toggle('searching', show);
+  if (show) {
+    queryInput.focus();
+    queryInput.select();
+  } else if (query !== '') {
+    query = '';
+    queryInput.value = '';
+    save();
+    render();
+  }
 }
 
 function run(command: string, prKey?: string, sessionId?: string): void {
@@ -123,8 +150,8 @@ function toggle(id: string, defaultOpen: boolean): void {
   render();
 }
 
-function groupHeader(g: PanelGroup): HTMLElement {
-  const isOpen = isGroupOpen(g);
+function groupHeader(g: PanelGroup, shown: PanelRow[] | null): HTMLElement {
+  const isOpen = shown !== null || isGroupOpen(g);
   const h = el('div', 'group nav');
   h.tabIndex = 0;
   h.setAttribute('role', 'treeitem');
@@ -141,10 +168,14 @@ function groupHeader(g: PanelGroup): HTMLElement {
     const p = el('span', 'gcount gprogress', `${g.progress}%`);
     p.prepend(icon('loading', 'codicon-modifier-spin'));
     h.append(p);
+  } else if (shown !== null) {
+    h.append(el('span', 'gcount', `${shown.length}/${g.rows.length}`));
   } else {
     h.append(el('span', 'gcount', unseen > 0 ? `${g.rows.length} · ${unseen} new` : String(g.rows.length)));
   }
-  h.addEventListener('click', () => toggle(g.id, g.myTurn));
+  if (shown === null) {
+    h.addEventListener('click', () => toggle(g.id, g.myTurn));
+  }
   h.draggable = true;
   h.dataset.group = g.id;
   h.title = 'Drag to reorder, or Alt+Up / Alt+Down';
@@ -208,13 +239,16 @@ function card(r: PanelRow): HTMLElement {
   const body = el('div', 'body');
   const top = el('div', 'top');
   top.append(el('span', 'repo', r.repo), el('span', 'num', `#${r.number}`));
+  if (r.unseen) {
+    top.append(el('span', 'dot', '●'));
+  }
+  if (r.author) {
+    top.append(el('span', 'author', r.author));
+  }
   if (r.authorTrust === 'new') {
     const mark = icon('person-add', 'newauthor');
     mark.title = `${r.author}: first-time contributor`;
     top.append(mark);
-  }
-  if (r.unseen) {
-    top.append(el('span', 'dot', '●'));
   }
   top.append(el('span', 'when', r.whenLabel ? `${r.whenLabel} ${ago(r.when)}` : ago(r.when)));
   body.append(top, el('div', 'title', r.title));
@@ -303,12 +337,19 @@ function render(): void {
   } else if (groups.length === 0) {
     root.append(message('Nothing waiting on you.', 'check'));
   }
+  const words = terms();
+  let hits = 0;
   for (const g of groups) {
-    root.append(groupHeader(g));
-    if (!isGroupOpen(g)) {
+    const shown = words.length > 0 ? g.rows.filter((r) => matches(r, words)) : null;
+    if (shown !== null && shown.length === 0) {
       continue;
     }
-    for (const r of g.rows) {
+    hits += shown?.length ?? 0;
+    root.append(groupHeader(g, shown));
+    if (shown === null && !isGroupOpen(g)) {
+      continue;
+    }
+    for (const r of shown ?? g.rows) {
       root.append(card(r));
       if (!open.has(r.key)) {
         continue;
@@ -328,6 +369,9 @@ function render(): void {
         root.append(sessionRow(r, s));
       }
     }
+  }
+  if (words.length > 0 && hits === 0 && groups.length > 0) {
+    root.append(message(`No matches for "${query.trim()}".`, 'search'));
   }
   if (focusKey) {
     root.querySelector<HTMLElement>(`.card[data-key="${CSS.escape(focusKey)}"]`)?.focus();
@@ -368,9 +412,29 @@ root.addEventListener('keydown', (e) => {
   }
 });
 
+queryInput.value = query;
+showSearch(query !== '');
+queryInput.addEventListener('input', () => {
+  query = queryInput.value;
+  save();
+  render();
+});
+queryInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    showSearch(false);
+    e.preventDefault();
+  } else if (e.key === 'ArrowDown' || e.key === 'Enter') {
+    root.querySelector<HTMLElement>('.card')?.focus();
+    e.preventDefault();
+  }
+});
+document.getElementById('clear')!.addEventListener('click', () => showSearch(false));
+
 window.addEventListener('message', (e: MessageEvent) => {
-  const msg = e.data as DataMessage | { type: 'collapseAll' };
-  if (msg.type === 'data') {
+  const msg = e.data as DataMessage | { type: 'collapseAll' | 'search' };
+  if (msg.type === 'search') {
+    showSearch(searchBar.hidden !== false);
+  } else if (msg.type === 'data') {
     data = msg;
     render();
   } else if (msg.type === 'collapseAll') {

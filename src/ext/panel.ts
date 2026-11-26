@@ -14,6 +14,7 @@ export class PrPanel implements vscode.WebviewViewProvider, vscode.Disposable {
   private readonly store: Store;
   private readonly media: vscode.Uri;
   private readonly subs: vscode.Disposable[] = [];
+  private pendingSearch = false;
 
   constructor(context: vscode.ExtensionContext, store: Store) {
     this.store = store;
@@ -31,6 +32,17 @@ export class PrPanel implements vscode.WebviewViewProvider, vscode.Disposable {
     void this.view?.webview.postMessage({ type: 'collapseAll' });
   }
 
+  async search(): Promise<void> {
+    const ready = this.view !== undefined;
+    this.pendingSearch = !ready;
+    if (!this.view?.visible) {
+      await vscode.commands.executeCommand(`${PrPanel.id}.focus`);
+    }
+    if (ready) {
+      void this.view?.webview.postMessage({ type: 'search' });
+    }
+  }
+
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
     view.webview.options = { enableScripts: true, localResourceRoots: [this.media] };
@@ -38,6 +50,10 @@ export class PrPanel implements vscode.WebviewViewProvider, vscode.Disposable {
     view.webview.onDidReceiveMessage((msg: { type: string; command?: string; ids?: unknown } & Target) => {
       if (msg.type === 'ready') {
         this.update();
+        if (this.pendingSearch) {
+          this.pendingSearch = false;
+          void view.webview.postMessage({ type: 'search' });
+        }
       } else if (msg.type === 'command' && msg.command && ALLOWED.test(msg.command)) {
         void vscode.commands.executeCommand(msg.command, { prKey: msg.prKey, sessionId: msg.sessionId });
       } else if (msg.type === 'order' && Array.isArray(msg.ids)) {
@@ -95,6 +111,11 @@ export class PrPanel implements vscode.WebviewViewProvider, vscode.Disposable {
 <link rel="stylesheet" href="${uri('panel.css')}">
 </head>
 <body>
+<div id="search" class="search" hidden>
+<i class="codicon codicon-search"></i>
+<input id="query" type="text" placeholder="Search number, author, title, label" aria-label="Search the list" spellcheck="false">
+<button id="clear" class="act" title="Clear and Close (Escape)" aria-label="Clear and close search"><i class="codicon codicon-close"></i></button>
+</div>
 <div id="root" role="tree" aria-label="Pull requests"></div>
 <script nonce="${nonce}" src="${uri('panel.js')}"></script>
 </body>

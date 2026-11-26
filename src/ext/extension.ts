@@ -83,6 +83,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('ghtracker.refresh', () => store.refresh(false, true)),
     vscode.commands.registerCommand('ghtracker.signIn', () => store.refresh(true, true)),
     vscode.commands.registerCommand('ghtracker.collapseAll', () => panel.collapseAll()),
+    vscode.commands.registerCommand('ghtracker.search', () => panel.search()),
     vscode.commands.registerCommand('ghtracker.markAllSeen', () => store.markSeen(store.groups.flatMap((g) => g.rows).map((r) => r.key))),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration('ghtracker')) {
